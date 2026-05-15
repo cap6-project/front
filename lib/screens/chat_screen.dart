@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'level_detail_screen.dart';
 
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key});
+  final VoidCallback? onBackPressed;
+
+  const ChatScreen({super.key, this.onBackPressed});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -93,7 +95,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   label: '뒤로가기',
                   child: InkWell(
                     borderRadius: BorderRadius.circular(16),
-                    onTap: () => Navigator.maybePop(context),
+                    onTap:
+                        widget.onBackPressed ??
+                        () => Navigator.maybePop(context),
                     child: const SizedBox(
                       width: 48,
                       height: 48,
@@ -115,7 +119,10 @@ class _ChatScreenState extends State<ChatScreen> {
                     onPressed: _handleVoiceInput,
                     icon: const Icon(Icons.mic_none, size: 26),
                     splashRadius: 24,
-                    constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
                   ),
                 ),
               ],
@@ -129,13 +136,19 @@ class _ChatScreenState extends State<ChatScreen> {
                 final message = _messages[index];
                 final isBot = message['isBot'] as bool;
                 return Align(
-                  alignment: isBot ? Alignment.centerLeft : Alignment.centerRight,
+                  alignment: isBot
+                      ? Alignment.centerLeft
+                      : Alignment.centerRight,
                   child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.75,
+                    ),
                     child: Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: isBot ? const Color(0xFFF3F8FF) : const Color(0xFFDBEAFE),
+                        color: isBot
+                            ? const Color(0xFFF3F8FF)
+                            : const Color(0xFFDBEAFE),
                         borderRadius: BorderRadius.only(
                           topLeft: const Radius.circular(18),
                           topRight: const Radius.circular(18),
@@ -143,13 +156,19 @@ class _ChatScreenState extends State<ChatScreen> {
                           bottomRight: Radius.circular(isBot ? 18 : 0),
                         ),
                         boxShadow: const [
-                          BoxShadow(color: Color(0x0A000000), blurRadius: 12, offset: Offset(0, 6)),
+                          BoxShadow(
+                            color: Color(0x0A000000),
+                            blurRadius: 12,
+                            offset: Offset(0, 6),
+                          ),
                         ],
                       ),
                       child: Text(
                         message['text'] as String,
                         style: TextStyle(
-                          color: isBot ? const Color(0xFF1E293B) : const Color(0xFF0F172A),
+                          color: isBot
+                              ? const Color(0xFF1E293B)
+                              : const Color(0xFF0F172A),
                           fontSize: 15,
                         ),
                       ),
@@ -176,7 +195,10 @@ class _ChatScreenState extends State<ChatScreen> {
                       hintText: '입문, 초급 등을 입력하세요',
                       filled: true,
                       fillColor: const Color(0xFFF1F5F9),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 14,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(18),
                         borderSide: BorderSide.none,
@@ -198,7 +220,11 @@ class _ChatScreenState extends State<ChatScreen> {
                         color: const Color(0xFF00AEEF),
                         borderRadius: BorderRadius.circular(18),
                       ),
-                      child: const Icon(Icons.send, color: Colors.white, size: 24),
+                      child: const Icon(
+                        Icons.send,
+                        color: Colors.white,
+                        size: 24,
+                      ),
                     ),
                   ),
                 ),
