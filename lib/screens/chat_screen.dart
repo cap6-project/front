@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'level_detail_screen.dart';
 
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key});
+  final VoidCallback? onBackPressed;
+
+  const ChatScreen({super.key, this.onBackPressed});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -93,7 +95,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   label: '뒤로가기',
                   child: InkWell(
                     borderRadius: BorderRadius.circular(16),
-                    onTap: () => Navigator.maybePop(context),
+                    onTap: widget.onBackPressed ?? () => Navigator.maybePop(context),
                     child: const SizedBox(
                       width: 48,
                       height: 48,

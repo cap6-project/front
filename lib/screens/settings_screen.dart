@@ -1,11 +1,14 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:puzzle_dot/services/tts_manager.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  final VoidCallback? onBackPressed;
+
+  const SettingsScreen({super.key, this.onBackPressed});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -15,21 +18,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final FlutterTts _tts = FlutterTts();
   int _completedCount = 0;
   double _speechRate = 0.8;
+  double _volume = 1.0;
   bool _vibrationEnabled = true;
+  bool _isPlayingSample = false;
   static const int _totalLevels = 78;
+  static const String appVersion = '1.0.0';
+  static const String modelVersion = '2.1.0';
+  static const String lastUpdateDate = '2026-04-11';
 
   @override
   void initState() {
     super.initState();
+    TtsManager.instance.register(_tts);
     _initializeTts();
-    _loadPreferences();
+    _prepareSettings();
+  }
+
+  Future<void> _prepareSettings() async {
+    await _loadPreferences();
+    await _calculateProgress();
+    if (mounted) {
+      _speakProgress();
+    }
+  }
+
+  Future<void> _stopTts() async {
+    try {
+      await _tts.stop();
+    } catch (_) {
+      // ignore
+    }
+    if (mounted) {
+      setState(() => _isPlayingSample = false);
+    }
   }
 
   Future<void> _initializeTts() async {
     try {
       await _tts.setLanguage('ko-KR');
       await _tts.setSpeechRate(_speechRate);
-      await _tts.setVolume(1.0);
+      await _tts.setVolume(_volume);
       await _tts.setPitch(1.0);
     } catch (_) {
       // TTS 초기화 실패 시 무시
@@ -38,28 +66,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
-    final doneKeys = prefs.getKeys().where((key) => key.startsWith('done_')); 
-    final completed = doneKeys.where((key) => prefs.getBool(key) == true).length;
+    final doneKeys = prefs.getKeys().where((key) => key.startsWith('done_'));
+    final completed = doneKeys
+        .where((key) => prefs.getBool(key) == true)
+        .length;
     final vibration = prefs.getBool('vibration_enabled') ?? true;
     final speechRate = prefs.getDouble('tts_speech_rate') ?? _speechRate;
+    final volume = prefs.getDouble('tts_volume') ?? _volume;
 
     setState(() {
       _completedCount = completed;
       _vibrationEnabled = vibration;
       _speechRate = speechRate;
+      _volume = volume;
     });
+  }
 
-    await _speakProgress();
+  Future<void> _calculateProgress() async {
+    final prefs = await SharedPreferences.getInstance();
+    final doneKeys = prefs.getKeys().where((key) => key.startsWith('done_'));
+    final completed = doneKeys
+        .where((key) => prefs.getBool(key) == true)
+        .length;
+    if (mounted) {
+      setState(() => _completedCount = completed);
+    }
   }
 
   Future<void> _speakProgress() async {
-    final message = '전체 $_totalLevels개 중 $_completedCount개 완료했습니다. '
-        '진도율을 다시 듣고 싶으면 진도율 다시 듣기 버튼을 누르세요.';
+    final message1 = '전체 $_totalLevels개 중 $_completedCount개 완료했습니다.';
+    final message2 = '입문 완료, 초급 3개 중 2개 진행 중, 중급 미시작, 고급 미시작입니다.';
+
+    setState(() => _isPlayingSample = true);
     try {
       await _tts.setSpeechRate(_speechRate);
-      await _tts.speak(message);
+      await _tts.setVolume(_volume);
+      await _tts.speak(message1);
     } catch (_) {
       // ignore
+    }
+
+    await Future.delayed(const Duration(milliseconds: 2500));
+
+    try {
+      await _tts.speak(message2);
+    } catch (_) {
+      // ignore
+    }
+
+    await Future.delayed(const Duration(milliseconds: 3500));
+    if (mounted) {
+      setState(() => _isPlayingSample = false);
     }
   }
 
@@ -78,9 +135,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await launchUrl(uri);
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('이메일 앱을 열 수 없습니다.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('이메일 앱을 열 수 없습니다.')));
       }
     }
   }
@@ -89,7 +146,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _vibrationEnabled = value);
     _savePreference('vibration_enabled', value);
     if (value) {
-      HapticFeedback.lightImpact();
+      HapticFeedback.heavyImpact();
     }
   }
 
@@ -99,37 +156,167 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _tts.setSpeechRate(value);
   }
 
+  void _updateVolume(double value) {
+    setState(() => _volume = value);
+    _savePreference('tts_volume', value);
+    _tts.setVolume(value);
+  }
+
+  Widget _buildSettingsRow({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    VoidCallback? onTap,
+    Widget? trailing,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: Color(0xFFF1F5F9), width: 1.0)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: const Color(0xFF2563EB), size: 24),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (trailing != null)
+              trailing
+            else
+              const Icon(Icons.chevron_right, color: Color(0xFF94A3B8)),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildTile({
     required String title,
     required String subtitle,
     required Widget child,
-    required VoidCallback onTap,
+    VoidCallback? onTap,
     required String semanticsLabel,
   }) {
-    return Semantics(
-      button: true,
+    final tile = Semantics(
+      button: onTap != null,
       label: semanticsLabel,
-      child: InkWell(
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x14000000),
+              blurRadius: 22,
+              offset: Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              style: const TextStyle(fontSize: 14, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 16),
+            child,
+          ],
+        ),
+      ),
+    );
+
+    if (onTap != null) {
+      return InkWell(
         borderRadius: BorderRadius.circular(24),
         onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: const [
-              BoxShadow(color: Color(0x14000000), blurRadius: 22, offset: Offset(0, 12)),
-            ],
+        child: tile,
+      );
+    } else {
+      return tile;
+    }
+  }
+
+  Widget _buildGradientButton({
+    required String label,
+    required VoidCallback onPressed,
+    required Gradient gradient,
+    Color textColor = Colors.white,
+    double height = 58,
+  }) {
+    return SizedBox(
+      height: height,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: gradient,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x22006CC3),
+              blurRadius: 20,
+              offset: Offset(0, 10),
+            ),
+          ],
+        ),
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28),
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 6),
-              Text(subtitle, style: const TextStyle(fontSize: 14, color: Color(0xFF64748B))),
-              const Spacer(),
-              child,
-            ],
+          onPressed: onPressed,
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: textColor,
+            ),
           ),
         ),
       ),
@@ -137,118 +324,356 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   @override
+  void dispose() {
+    TtsManager.instance.unregister(_tts);
+    _stopTts();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return SafeArea(
+    return WillPopScope(
+      onWillPop: () async {
+        await _stopTts();
+        return true;
+      },
       child: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: const [
-                    BoxShadow(color: Color(0x14000000), blurRadius: 26, offset: Offset(0, 14)),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        backgroundColor: const Color(0xFFE8F4FF),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 20),
+                Stack(
+                  alignment: Alignment.center,
                   children: [
-                    const Text('진도율 안내', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 12),
-                    Text('전체 $_totalLevels개 중 $_completedCount개 완료', style: const TextStyle(fontSize: 18, color: Color(0xFF334155))),
-                    const SizedBox(height: 12),
-                    const Text(
-                      '진입 시 자동으로 진도 상태를 음성으로 안내합니다. 필요한 메뉴를 선택해 주세요.',
-                      style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              GridView.count(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  _buildTile(
-                    title: '진도율 다시 듣기',
-                    subtitle: '현재 완료 상태를 다시 음성으로 안내합니다.',
-                    semanticsLabel: '진도율 다시 듣기 버튼',
-                    onTap: _speakProgress,
-                    child: const Icon(Icons.volume_up, size: 36, color: Color(0xFF2563EB)),
-                  ),
-                  _buildTile(
-                    title: 'TTS 속도 조절',
-                    subtitle: '음성 안내 속도를 조절합니다.',
-                    semanticsLabel: 'TTS 속도 조절 슬라이더',
-                    onTap: () {},
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Slider(
-                          value: _speechRate,
-                          min: 0.4,
-                          max: 1.2,
-                          divisions: 8,
-                          label: '${_speechRate.toStringAsFixed(1)}x',
-                          onChanged: _updateSpeechRate,
-                        ),
-                        Text('${_speechRate.toStringAsFixed(1)}x', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                      ],
-                    ),
-                  ),
-                  _buildTile(
-                    title: '진동 피드백',
-                    subtitle: '정답/오답 시 진동을 켜거나 끕니다.',
-                    semanticsLabel: '진동 피드백 토글',
-                    onTap: () => _toggleVibration(!_vibrationEnabled),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _vibrationEnabled ? '켜짐' : '꺼짐',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x14000000),
+                            blurRadius: 20,
+                            offset: Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: CircleAvatar(
+                          radius: 50,
+                          backgroundColor: Color(0xFFEEF8FF),
+                          child: Icon(
+                            Icons.person,
+                            size: 56,
+                            color: Color(0xFF2563EB),
                           ),
                         ),
-                        Switch(
-                          value: _vibrationEnabled,
-                          onChanged: _toggleVibration,
+                      ),
+                    ),
+                    Positioned(
+                      right: MediaQuery.of(context).size.width * 0.5 - 50,
+                      bottom: 12,
+                      child: Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2563EB),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x22000000),
+                              blurRadius: 10,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
                         ),
-                      ],
+                        child: const Icon(
+                          Icons.edit,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
                     ),
-                  ),
-                  _buildTile(
-                    title: '고객센터',
-                    subtitle: '이메일로 문의하기',
-                    semanticsLabel: '고객센터 이메일 문의 버튼',
-                    onTap: _sendEmail,
-                    child: const Icon(Icons.email_outlined, size: 36, color: Color(0xFF0B6E99)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              Semantics(
-                button: true,
-                label: '설정 화면 닫기',
-                child: SizedBox(
-                  height: 56,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.maybePop(context),
-                    style: OutlinedButton.styleFrom(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                    ),
-                    child: const Text('돌아가기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  '알렉스',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF0F172A),
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 6),
+                const Text(
+                  'alex.learner@example.com',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 18,
+                          horizontal: 16,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x14000000),
+                              blurRadius: 20,
+                              offset: Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(
+                              Icons.local_fire_department,
+                              color: Color(0xFF2563EB),
+                              size: 28,
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              '진도: $_completedCount/$_totalLevels',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              '학습 진도',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 18,
+                          horizontal: 16,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x14000000),
+                              blurRadius: 20,
+                              offset: Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            GestureDetector(
+                              onTap: _isPlayingSample ? null : _speakProgress,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEFF6FF),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                padding: const EdgeInsets.all(6),
+                                child: Icon(
+                                  _isPlayingSample
+                                      ? Icons.volume_up
+                                      : Icons.replay,
+                                  color: const Color(0xFF2563EB),
+                                  size: 28,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '다시듣기',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _isPlayingSample ? '재생 중...' : '진도 안내',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x14000000),
+                        blurRadius: 20,
+                        offset: Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      _buildSettingsRow(
+                        icon: Icons.volume_up,
+                        title: '음성 속도',
+                        subtitle: 'TTS 재생 속도 조절',
+                        trailing: SizedBox(
+                          width: 100,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Text(
+                                '${_speechRate.toStringAsFixed(1)}x',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF2563EB),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+                          ),
+                        ),
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('음성 속도 조절'),
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Slider(
+                                    value: _speechRate,
+                                    min: 0.5,
+                                    max: 1.5,
+                                    divisions: 10,
+                                    label: '${_speechRate.toStringAsFixed(1)}x',
+                                    onChanged: _updateSpeechRate,
+                                    activeColor: const Color(0xFF2563EB),
+                                  ),
+                                  Text('${_speechRate.toStringAsFixed(1)}x'),
+                                ],
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text('확인'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                      _buildSettingsRow(
+                        icon: Icons.volume_mute,
+                        title: '음량',
+                        subtitle: 'TTS 음성 크기',
+                        trailing: SizedBox(
+                          width: 100,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Text(
+                                '${(_volume * 100).toStringAsFixed(0)}%',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF2563EB),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+                          ),
+                        ),
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('음량 조절'),
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Slider(
+                                    value: _volume,
+                                    min: 0.0,
+                                    max: 1.0,
+                                    divisions: 10,
+                                    label:
+                                        '${(_volume * 100).toStringAsFixed(0)}%',
+                                    onChanged: _updateVolume,
+                                    activeColor: const Color(0xFF2563EB),
+                                  ),
+                                  Text(
+                                    '${(_volume * 100).toStringAsFixed(0)}%',
+                                  ),
+                                ],
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text('확인'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                      _buildSettingsRow(
+                        icon: Icons.vibration,
+                        title: '진동 피드백',
+                        subtitle: '정답/오답 시 진동 알림',
+                        trailing: Switch(
+                          value: _vibrationEnabled,
+                          onChanged: _toggleVibration,
+                          activeColor: const Color(0xFF2563EB),
+                        ),
+                      ),
+                      _buildSettingsRow(
+                        icon: Icons.email_outlined,
+                        title: '고객 지원',
+                        subtitle: '문제 및 피드백 전송',
+                        onTap: _sendEmail,
+                      ),
+                      _buildSettingsRow(
+                        icon: Icons.info_outline,
+                        title: '앱 정보',
+                        subtitle: '버전: $appVersion / 모델: $modelVersion',
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
       ),

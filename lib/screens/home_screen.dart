@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:puzzle_dot/services/tts_manager.dart';
 
 import 'package:puzzle_dot/screens/chat_screen.dart';
 import 'package:puzzle_dot/screens/level_completion_screen.dart';
@@ -66,6 +67,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   ];
 
   void _onTapNav(int index) {
+    TtsManager.instance.stopAll();
     setState(() {
       _selectedIndex = index;
     });
@@ -428,11 +430,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   Widget _buildChatTab() {
-    return const ChatScreen();
+    return ChatScreen(
+      onBackPressed: () => setState(() => _selectedIndex = 0),
+    );
   }
 
   Widget _buildSettingsTab() {
-    return const SettingsScreen();
+    return SettingsScreen(
+      onBackPressed: () => setState(() => _selectedIndex = 0),
+      isActive: _selectedIndex == 2,
+    );
   }
 
   @override
