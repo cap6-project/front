@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'level_detail_screen.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import '../services/chatbot_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final VoidCallback? onBackPressed;
@@ -13,72 +14,136 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _controller = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+
+  // 초기 웰컴 메시지 세팅
   final List<Map<String, dynamic>> _messages = [
-    {'text': '안녕하세요! 점자 학습 챗봇입니다. 궁금한 내용을 입력해 주세요.', 'isBot': true},
+    {
+      'text':
+          '안녕하세요! 점자 학습 챗봇입니다.\n"초급 학습 보여줘" 혹은 "점자의 역사가 궁금해" 등 자유롭게 말씀해 주세요!',
+      'isBot': true,
+    },
   ];
 
-  static const Map<String, Map<String, String>> _keywordMap = {
-    '입문': {'id': 'ENT_001', 'title': '입문'},
-    '초급': {'id': 'BAS_001', 'title': '초급'},
-    '중급': {'id': 'INT_001', 'title': '중급'},
-    '고급': {'id': 'ADV_001', 'title': '고급'},
-  };
+  // STT 및 인스턴스 상태 관리 변수
+  late stt.SpeechToText _speech;
+  bool _isListening = false;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _speech = stt.SpeechToText();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// 스크롤을 항상 가장 아래(최신 대화)로 이동시키는 헬퍼 메서드
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
 
   void _addUserMessage(String text) {
     setState(() {
       _messages.add({'text': text, 'isBot': false});
     });
+    _scrollToBottom();
   }
 
   void _addBotMessage(String text) {
     setState(() {
       _messages.add({'text': text, 'isBot': true});
     });
+    _scrollToBottom();
   }
 
-  void _navigateToLearning(String levelId, String stageTitle) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => LevelDetailScreen(
-          levelId: levelId,
-          stageTitle: stageTitle,
-          stageDescription: '$stageTitle 단계로 바로 이동합니다.',
-        ),
-      ),
-    );
-  }
-
-  void _handleSend() {
+  /// 텍스트 입력 및 LLM 연동 메인 처리 로직
+  void _handleSend() async {
     final text = _controller.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _isLoading) return;
 
     _addUserMessage(text);
     _controller.clear();
 
-    final match = _keywordMap.entries.firstWhere(
-      (entry) => text.contains(entry.key),
-      orElse: () => const MapEntry('', {'id': '', 'title': ''}),
-    );
+    setState(() {
+      _isLoading = true;
+    });
 
-    final keywordId = match.value['id'] ?? '';
-    final keywordTitle = match.value['title'] ?? '';
+    // LLM 통신 요청 수행
+    final llmResult = await ChatbotService.sendMessageToLLM(text);
 
-    if (keywordId.isNotEmpty) {
-      _addBotMessage('$keywordTitle 학습 화면으로 이동합니다. 잠시만 기다려 주세요.');
-      Future.delayed(
-        const Duration(milliseconds: 500),
-        () => _navigateToLearning(keywordId, keywordTitle),
-      );
-      return;
+    setState(() {
+      _isLoading = false;
+    });
+
+    // LLM 답변 화면에 빌드
+    _addBotMessage(llmResult['reply']!);
+
+    // 라우팅 결과(딥링크 키워드)가 들어있다면 지연 후 화면 이동 수행
+    final route = llmResult['route']!;
+    if (route.isNotEmpty) {
+      Future.delayed(const Duration(milliseconds: 1000), () {
+        if (mounted) {
+          ChatbotService.navigateByRoute(route, context);
+        }
+      });
     }
-
-    _addBotMessage('좋은 질문이에요. 점자 학습과 관련된 키워드(입문, 초급)를 입력해 보세요.');
   }
 
-  void _handleVoiceInput() {
-    _addUserMessage('음성 입력을 시도합니다.');
-    _addBotMessage('음성 입력 기능은 지금은 준비 중입니다. 텍스트로도 입력할 수 있어요.');
+  /// STT 음성 입력 기능 처리 로직
+  void _handleVoiceInput() async {
+    if (!_isListening) {
+      bool available = await _speech.initialize(
+        onStatus: (status) {
+          if (status == 'notListening' || status == 'done') {
+            setState(() => _isListening = false);
+          }
+        },
+        onError: (errorNotification) {
+          setState(() => _isListening = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('음성 인식 오류: ${errorNotification.errorMsg}')),
+          );
+        },
+      );
+
+      if (available) {
+        setState(() => _isListening = true);
+        _speech.listen(
+          onResult: (result) {
+            setState(() {
+              _controller.text = result.recognizedWords;
+            });
+            // 음성 입력이 완전히 끝나면 자동으로 메시지 전송 실행
+            if (result.finalResult) {
+              setState(() => _isListening = false);
+              _handleSend();
+            }
+          },
+          localeId: 'ko_KR', // 한국어 인식 강제 지정
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('현재 기기에서 음성 인식을 사용할 수 없습니다.')),
+        );
+      }
+    } else {
+      setState(() => _isListening = false);
+      _speech.stop();
+    }
   }
 
   @override
@@ -86,6 +151,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return SafeArea(
       child: Column(
         children: [
+          // 상단 바 상단 레이아웃
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
@@ -117,7 +183,12 @@ class _ChatScreenState extends State<ChatScreen> {
                   label: '음성 입력 버튼',
                   child: IconButton(
                     onPressed: _handleVoiceInput,
-                    icon: const Icon(Icons.mic_none, size: 26),
+                    // 음성 인식 중일 때 마이크 아이콘 색상 하이라이팅 변경
+                    icon: Icon(
+                      _isListening ? Icons.mic : Icons.mic_none,
+                      size: 26,
+                      color: _isListening ? Colors.redAccent : Colors.black87,
+                    ),
                     splashRadius: 24,
                     constraints: const BoxConstraints(
                       minWidth: 48,
@@ -129,12 +200,44 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
           const Divider(height: 1),
+
+          // 대화 리스트 영역
           Expanded(
             child: ListView.separated(
+              controller: _scrollController,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              itemCount:
+                  _messages.length + (_isLoading ? 1 : 0), // 로딩 아이템 카운트 추가
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (context, index) {
+                // 로딩 인디케이터 조건 분기 처리
+                if (index == _messages.length) {
+                  return Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3F8FF),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF00AEEF),
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
                 final message = _messages[index];
                 final isBot = message['isBot'] as bool;
+
                 return Align(
                   alignment: isBot
                       ? Alignment.centerLeft
@@ -176,10 +279,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 );
               },
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemCount: _messages.length,
             ),
           ),
+
+          // 하단 텍스트 필드 입력부
           Container(
             color: Colors.white,
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
@@ -192,7 +295,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => _handleSend(),
                     decoration: InputDecoration(
-                      hintText: '입문, 초급 등을 입력하세요',
+                      hintText: _isListening
+                          ? '말씀 내용을 듣고 있습니다...'
+                          : '질문을 자유롭게 입력해보세요.',
                       filled: true,
                       fillColor: const Color(0xFFF1F5F9),
                       contentPadding: const EdgeInsets.symmetric(
