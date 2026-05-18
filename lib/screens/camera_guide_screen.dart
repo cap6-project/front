@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:puzzle_dot/core/constants/prefs_keys.dart';
-import 'package:puzzle_dot/services/app_tts_service.dart';
+import 'package:puzzle_dot/services/tts/app_tts_service.dart';
 
 class CameraGuideScreen extends StatefulWidget {
   final String levelId;
@@ -34,7 +34,6 @@ class _CameraGuideScreenState extends State<CameraGuideScreen> {
   @override
   void dispose() {
     _tts.stop();
-    _tts.dispose();
     super.dispose();
   }
 

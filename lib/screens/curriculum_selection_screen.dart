@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:puzzle_dot/data/curriculum_data.dart';
 import 'package:puzzle_dot/models/curriculum_item.dart';
 import 'package:puzzle_dot/screens/active_learning_screen.dart';
-import 'package:puzzle_dot/services/app_tts_service.dart';
+import 'package:puzzle_dot/services/tts/app_tts_service.dart';
+import 'package:puzzle_dot/services/tts/tts_script_provider.dart';
 import 'package:puzzle_dot/services/progress_service.dart';
 
 class CurriculumSelectionScreen extends StatefulWidget {
@@ -30,8 +31,12 @@ class _CurriculumSelectionScreenState extends State<CurriculumSelectionScreen> {
     return curriculumData[widget.levelId] ?? [];
   }
 
+  // 커리큘럼 선택 화면 안내 문장
+  ///
+  /// 화면은 문장 조립 규칙을 직접 알지 않음
+  /// TTS 문장 변경 시 TtsScriptProvider만 수정
   String get _guideMessage {
-    return '${widget.levelTitle} 학습 단계입니다. 학습할 항목을 선택하세요.';
+    return TtsScriptProvider.curriculumSelection(widget.levelTitle);
   }
 
   @override
