@@ -1,409 +1,392 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:puzzle_dot/services/tts_manager.dart';
-import 'level_detail_screen.dart';
+import 'package:puzzle_dot/services/streak_service.dart';
+import 'package:puzzle_dot/services/xp_service.dart';
+import 'package:puzzle_dot/models/curriculum_item.dart';
+import 'active_learning_screen.dart';
 
 class LevelCompletionScreen extends StatefulWidget {
   final String levelId;
   final String levelName;
-  final String? itemName;
-  final String nextLevelId;
-  final String nextLevelName;
+  final String itemName;
   final double completionRate;
+  final List<CurriculumItem>? allItems;
+  final int? currentIndex;
 
   const LevelCompletionScreen({
     super.key,
-    this.levelId = 'ENT_001',
-    this.levelName = '입문 1',
-    this.itemName,
-    this.nextLevelId = 'BAS_001',
-    this.nextLevelName = '초급',
-    this.completionRate = 0.92,
+    this.levelId = '',
+    this.levelName = '',
+    this.itemName = '',
+    this.completionRate = 1.0,
+    this.allItems,
+    this.currentIndex,
   });
 
   @override
-  State<LevelCompletionScreen> createState() => _LevelCompletionScreenState();
+  State<LevelCompletionScreen> createState() =>
+      _LevelCompletionScreenState();
 }
 
-class _LevelCompletionScreenState extends State<LevelCompletionScreen> {
+class _LevelCompletionScreenState
+    extends State<LevelCompletionScreen> {
   final FlutterTts _tts = FlutterTts();
   bool _isSpeaking = false;
-  final FocusNode _replayFocus = FocusNode();
-  final FocusNode _nextButtonFocus = FocusNode();
-  final FocusNode _retryButtonFocus = FocusNode();
-  final FocusNode _homeButtonFocus = FocusNode();
-
-  String get _displayName => widget.itemName ?? widget.levelName;
+  int _streak = 0;
+  int _totalXp = 0;
 
   @override
   void initState() {
     super.initState();
     TtsManager.instance.register(_tts);
-    _initializeTts();
-    _markLevelCompleted();
-    _speakCompletionMessage();
+    _init();
   }
 
-  Future<void> _initializeTts() async {
+  Future<void> _init() async {
+    await _initTts();
+    await _loadStats();
+    _speak();
+  }
+
+  Future<void> _initTts() async {
     try {
       await _tts.setLanguage('ko-KR');
       await _tts.setSpeechRate(0.8);
       await _tts.setVolume(1.0);
-      await _tts.setPitch(1.0);
     } catch (_) {}
   }
 
-  Future<void> _markLevelCompleted() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('done_${widget.levelId}', true);
+  Future<void> _loadStats() async {
+    final streak = await StreakService.getStreak();
+    final xp = await XpService.getTotalXp();
+    if (mounted) setState(() { _streak = streak; _totalXp = xp; });
   }
 
-  Future<void> _speakCompletionMessage() async {
-    final isReviewRecommended = widget.completionRate < 0.8;
-    final levelMessage = '$_displayName 단계 학습을 완료했습니다.';
-    final message = isReviewRecommended
-        ? '$levelMessage 정확도가 낮아 복습을 추천합니다. 학습 다시하기 버튼을 누르면 복습을 시작할 수 있습니다.'
-        : '$levelMessage 다음 학습으로 이어가기를 추천합니다. 다음 학습 버튼을 누르면 다음 단계를 시작합니다.';
-
-    setState(() => _isSpeaking = true);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) FocusScope.of(context).requestFocus(_replayFocus);
-    });
-
+  Future<void> _speak() async {
+    if (mounted) setState(() => _isSpeaking = true);
     try {
-      await _tts.speak(message);
+      await _tts.speak(
+          '정답입니다! ${widget.itemName} 학습을 완료했습니다.');
     } catch (_) {}
-
-    await Future.delayed(const Duration(milliseconds: 2500));
-    if (mounted) {
-      setState(() => _isSpeaking = false);
-      _focusRecommendedAction();
-    }
-  }
-
-  void _focusRecommendedAction() {
-    if (!mounted) return;
-    final focusNode = widget.completionRate < 0.8 ? _retryButtonFocus : _nextButtonFocus;
-    FocusScope.of(context).requestFocus(focusNode);
-  }
-
-  Future<void> _stopTts() async {
-    try {
-      _tts.stop();
-    } catch (_) {}
+    await Future.delayed(const Duration(milliseconds: 2200));
     if (mounted) setState(() => _isSpeaking = false);
   }
 
-  Future<void> _goHome() async {
+  Future<void> _stopTts() async {
+    try { _tts.stop(); } catch (_) {}
+    if (mounted) setState(() => _isSpeaking = false);
+  }
+
+  bool get _hasNext {
+    final items = widget.allItems;
+    final idx = widget.currentIndex;
+    return items != null && idx != null && idx + 1 < items.length;
+  }
+
+  void _goNext() async {
     await _stopTts();
-    if (!mounted) return;
+    final next = widget.allItems![widget.currentIndex! + 1];
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ActiveLearningScreen(
+          item: next,
+          levelId: widget.levelId,
+          levelName: widget.levelName,
+          allItems: widget.allItems!,
+          currentIndex: widget.currentIndex! + 1,
+        ),
+      ),
+    );
+  }
+
+  void _goHome() async {
+    await _stopTts();
     Navigator.popUntil(context, (route) => route.isFirst);
   }
 
-  Future<void> _retryLearning() async {
+  void _retry() async {
     await _stopTts();
-    if (!mounted) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => LevelDetailScreen(
-          levelId: widget.levelId,
-          stageTitle: _displayName,
-          stageDescription: '$_displayName 단계를 다시 시작합니다.',
-        ),
-      ),
-    );
-  }
-
-  Future<void> _goNextLearning() async {
-    await _stopTts();
-    if (!mounted) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => LevelDetailScreen(
-          levelId: widget.nextLevelId,
-          stageTitle: widget.nextLevelName,
-          stageDescription: '${widget.nextLevelName} 단계를 시작합니다.',
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGradientButton({
-    required String label,
-    required VoidCallback onPressed,
-    required Gradient gradient,
-    Color textColor = Colors.white,
-    double height = 58,
-    FocusNode? focusNode,
-  }) {
-    return Semantics(
-      button: true,
-      label: label,
-      child: SizedBox(
-        height: height,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: gradient,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: const [
-              BoxShadow(color: Color(0x22006CC3), blurRadius: 20, offset: Offset(0, 10)),
-            ],
-          ),
-          child: ElevatedButton(
-            focusNode: focusNode,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.transparent,
-              shadowColor: Colors.transparent,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-            ),
-            onPressed: onPressed,
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textColor),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOutlineButton({
-    required String label,
-    required VoidCallback onPressed,
-    Color borderColor = const Color(0xFF2563EB),
-    Color textColor = const Color(0xFF2563EB),
-    double height = 58,
-    FocusNode? focusNode,
-  }) {
-    return Semantics(
-      button: true,
-      label: label,
-      child: SizedBox(
-        height: height,
-        child: OutlinedButton(
-          focusNode: focusNode,
-          style: OutlinedButton.styleFrom(
-            side: BorderSide(color: borderColor, width: 1.8),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-            backgroundColor: Colors.white,
-          ),
-          onPressed: onPressed,
-          child: Text(
-            label,
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textColor),
-          ),
-        ),
-      ),
-    );
+    Navigator.pop(context);
   }
 
   @override
   void dispose() {
     TtsManager.instance.unregister(_tts);
     _tts.stop();
-    _replayFocus.dispose();
-    _nextButtonFocus.dispose();
-    _retryButtonFocus.dispose();
-    _homeButtonFocus.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isReviewRecommended = widget.completionRate < 0.8;
-    final recommendationTitle = isReviewRecommended ? '복습을 추천해요' : '다음 학습을 추천해요';
-    final recommendationText = isReviewRecommended
-        ? '정확도가 낮습니다. 학습 다시하기로 복습을 시작해 보세요.'
-        : '잘했어요! 다음 학습으로 이어가기를 추천합니다.';
-
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) async {
-        if (!didPop) {
-          await _stopTts();
-          if (mounted) Navigator.pop(context);
-        }
-      },
+    return WillPopScope(
+      onWillPop: () async { await _stopTts(); return true; },
       child: Scaffold(
-        backgroundColor: const Color(0xFFE8F4FF),
+        backgroundColor: const Color(0xFFF0F6FF),
         body: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 20, vertical: 22),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  children: [
-                    Semantics(
-                      button: true,
-                      label: '뒤로가기',
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: () async {
-                          await _stopTts();
-                          if (mounted) Navigator.maybePop(context);
-                        },
-                        child: Container(
-                          width: 46,
-                          height: 46,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: const [
-                              BoxShadow(color: Color(0x14000000), blurRadius: 18, offset: Offset(0, 8)),
-                            ],
-                          ),
-                          child: const Icon(Icons.arrow_back_ios_new,
-                              size: 20, color: Color(0xFF2563EB)),
-                        ),
-                      ),
+                // 뒤로가기
+                InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: _retry,
+                  child: Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: const [
+                        BoxShadow(
+                            color: Color(0x14000000),
+                            blurRadius: 18,
+                            offset: Offset(0, 8))
+                      ],
                     ),
-                    const SizedBox(width: 14),
-                    const Expanded(
-                      child: Text('Level Cleared',
-                          style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF0F172A))),
-                    ),
-                  ],
+                    child: const Icon(Icons.arrow_back_ios_new,
+                        size: 20, color: Color(0xFF2563EB)),
+                  ),
                 ),
                 const SizedBox(height: 24),
+                // 결과 카드
                 Container(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(28),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(32),
                     boxShadow: const [
-                      BoxShadow(color: Color(0x16000000), blurRadius: 32, offset: Offset(0, 14)),
+                      BoxShadow(
+                          color: Color(0x16000000),
+                          blurRadius: 32,
+                          offset: Offset(0, 14))
                     ],
                   ),
                   child: Column(
                     children: [
                       Container(
-                        width: 98,
-                        height: 98,
+                        width: 88,
+                        height: 88,
                         decoration: BoxDecoration(
+                          color: const Color(0xFF22C55E),
                           shape: BoxShape.circle,
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF60A5FA), Color(0xFF38BDF8)],
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                          ),
                           boxShadow: const [
-                            BoxShadow(color: Color(0x2200A3FF), blurRadius: 20, offset: Offset(0, 10)),
+                            BoxShadow(
+                                color: Color(0x3322C55E),
+                                blurRadius: 20,
+                                offset: Offset(0, 10))
                           ],
                         ),
-                        child: const Center(
-                          child: Icon(Icons.emoji_events, size: 44, color: Colors.white),
-                        ),
+                        child: const Icon(Icons.check,
+                            size: 48, color: Colors.white),
                       ),
-                      const SizedBox(height: 22),
+                      const SizedBox(height: 20),
                       const Text(
-                        'Level Cleared',
-                        textAlign: TextAlign.center,
+                        '정답입니다!',
                         style: TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF0F172A)),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        '$_displayName을(를) 성공적으로 마쳤습니다.',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            fontSize: 16, color: Color(0xFF64748B), height: 1.5),
-                      ),
-                      const SizedBox(height: 18),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
-                          borderRadius: BorderRadius.circular(22),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(recommendationTitle,
-                                style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF1D4ED8))),
-                            const SizedBox(height: 8),
-                            Text(recommendationText,
-                                style: const TextStyle(
-                                    fontSize: 14,
-                                    color: Color(0xFF475569),
-                                    height: 1.5)),
-                          ],
+                          fontSize: 30,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF15803D),
                         ),
                       ),
-                      const SizedBox(height: 18),
+                      if (widget.itemName.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          '목표: ${widget.itemName}',
+                          style: const TextStyle(
+                              fontSize: 15, color: Color(0xFF64748B)),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
                       if (_isSpeaking)
                         const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.volume_up, color: Color(0xFF2563EB)),
-                            SizedBox(width: 10),
+                            Icon(Icons.volume_up,
+                                color: Color(0xFF2563EB), size: 20),
+                            SizedBox(width: 8),
                             Text('음성 안내 중...',
                                 style: TextStyle(
-                                    color: Color(0xFF0F172A),
-                                    fontWeight: FontWeight.w700)),
+                                    color: Color(0xFF2563EB),
+                                    fontWeight: FontWeight.w600)),
                           ],
                         )
                       else
                         TextButton.icon(
-                          focusNode: _replayFocus,
-                          onPressed: _speakCompletionMessage,
-                          icon: const Icon(Icons.replay, color: Color(0xFF2563EB)),
+                          onPressed: _speak,
+                          icon: const Icon(Icons.replay,
+                              color: Color(0xFF2563EB), size: 18),
                           label: const Text('다시 듣기',
-                              style: TextStyle(
-                                  color: Color(0xFF2563EB),
-                                  fontWeight: FontWeight.w700)),
+                              style:
+                                  TextStyle(color: Color(0xFF2563EB))),
                         ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 22),
+                const SizedBox(height: 16),
+                // Streak + XP
                 Row(
                   children: [
                     Expanded(
-                      child: _buildOutlineButton(
-                        label: '학습 다시하기',
-                        onPressed: _retryLearning,
-                        focusNode: _retryButtonFocus,
+                      child: _StatCard(
+                        label: 'Daily Streak',
+                        value: '$_streak Days',
+                        icon: Icons.local_fire_department,
+                        iconColor: const Color(0xFFF97316),
                       ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _StatCard(
+                        label: 'XP Earned',
+                        value: '+$_totalXp XP',
+                        icon: Icons.star_rounded,
+                        iconColor: const Color(0xFFF59E0B),
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                // 버튼
+                Row(
+                  children: [
+                    Expanded(
+                      child: _OutlineBtn(
+                          label: '다시하기', onPressed: _retry),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
-                      child: _buildGradientButton(
-                        label: '다음 학습',
-                        onPressed: _goNextLearning,
-                        focusNode: _nextButtonFocus,
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF3B82F6), Color(0xFF22C55E)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
+                      child: _GradientBtn(
+                        label: _hasNext ? '다음 문제' : '홈으로',
+                        onPressed: _hasNext ? _goNext : _goHome,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 14),
-                _buildOutlineButton(
-                  label: '홈으로 가기',
-                  onPressed: _goHome,
-                  focusNode: _homeButtonFocus,
-                ),
+                _OutlineBtn(label: '홈으로 가기', onPressed: _goHome),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color iconColor;
+  const _StatCard(
+      {required this.label,
+      required this.value,
+      required this.icon,
+      required this.iconColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [
+          BoxShadow(
+              color: Color(0x0A000000),
+              blurRadius: 16,
+              offset: Offset(0, 8))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: iconColor, size: 22),
+          const SizedBox(height: 8),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 12, color: Color(0xFF64748B))),
+          const SizedBox(height: 4),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.w800)),
+        ],
+      ),
+    );
+  }
+}
+
+class _GradientBtn extends StatelessWidget {
+  final String label;
+  final VoidCallback onPressed;
+  const _GradientBtn(
+      {required this.label, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF3B82F6), Color(0xFF22C55E)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: const [
+          BoxShadow(
+              color: Color(0x22006CC3),
+              blurRadius: 20,
+              offset: Offset(0, 10))
+        ],
+      ),
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          minimumSize: const Size.fromHeight(58),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28)),
+        ),
+        onPressed: onPressed,
+        child: Text(label,
+            style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: Colors.white)),
+      ),
+    );
+  }
+}
+
+class _OutlineBtn extends StatelessWidget {
+  final String label;
+  final VoidCallback onPressed;
+  const _OutlineBtn(
+      {required this.label, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 58,
+      child: OutlinedButton(
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(
+              color: Color(0xFF2563EB), width: 1.8),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28)),
+          backgroundColor: Colors.white,
+        ),
+        onPressed: onPressed,
+        child: Text(label,
+            style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF2563EB))),
       ),
     );
   }

@@ -27,9 +27,6 @@ class _CurriculumSelectionScreenState
   void initState() {
     super.initState();
     _loadProgress();
-    AppTtsService()
-      ..speak('${widget.levelTitle} 학습 단계입니다. 학습할 항목을 선택하세요.')
-      ..dispose(); // speak 완료 후 dispose 필요시 별도 관리
   }
 
   Future<void> _loadProgress() async {

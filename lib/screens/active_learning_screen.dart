@@ -1,16 +1,8 @@
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:puzzle_dot/core/constants/prefs_keys.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:puzzle_dot/models/curriculum_item.dart';
-import 'package:puzzle_dot/services/app_tts_service.dart';
-import 'package:puzzle_dot/services/camera_service.dart';
-import 'package:puzzle_dot/services/hint_service.dart';
-import 'package:puzzle_dot/services/permission_service.dart';
 import 'package:puzzle_dot/services/progress_service.dart';
-import 'package:puzzle_dot/screens/camera_guide_screen.dart';
 import 'package:puzzle_dot/screens/level_completion_screen.dart';
-import 'package:puzzle_dot/screens/permission_screen.dart';
 
 class ActiveLearningScreen extends StatefulWidget {
   final CurriculumItem item;
@@ -33,376 +25,182 @@ class ActiveLearningScreen extends StatefulWidget {
       _ActiveLearningScreenState();
 }
 
-class _ActiveLearningScreenState
-    extends State<ActiveLearningScreen> {
-  // DIP: 추상에 의존
-  final AppTtsService _tts = AppTtsService();
-  final CameraService _camera = CameraService();
+class _ActiveLearningScreenState extends State<ActiveLearningScreen> {
+  bool _isAnalyzing = false;
 
-  bool _showGuide = false;    // 카메라 거치 가이드 표시 여부
-  bool _cameraReady = false;
-  bool _isCapturing = false;
-  int _wrongCount = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _init();
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final picked =
+        await picker.pickImage(source: ImageSource.gallery);
+    if (picked == null) return;
+    setState(() => _isAnalyzing = true);
+    await _analyzeImage();
   }
 
-  Future<void> _init() async {
-    // 1. 권한 확인 (PERM_001)
-    final hasPermission = await PermissionService.requestCamera();
-    if (!hasPermission) {
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-              builder: (_) => const PermissionScreen()),
-        );
-      }
-      return;
-    }
+  Future<void> _analyzeImage() async {
+    await Future.delayed(const Duration(milliseconds: 1200));
+    if (!mounted) return;
 
-    // 2. 카메라 거치 가이드 최초 1회 확인
-    final prefs = await SharedPreferences.getInstance();
-    final guideKey =
-        '${PrefsKeys.cameraGuidePrefix}${widget.levelId}';
-    final guideSeen = prefs.getBool(guideKey) ?? false;
-
-    if (!guideSeen && mounted) {
-      setState(() => _showGuide = true);
-      return; // 가이드 확인 후 _onGuideConfirmed 호출됨
-    }
-
-    await _startCamera();
-  }
-
-  Future<void> _onGuideConfirmed() async {
-    if (mounted) setState(() => _showGuide = false);
-    await _startCamera();
-  }
-
-  Future<void> _startCamera() async {
-    final ok = await _camera.initialize();
-    if (mounted) setState(() => _cameraReady = ok);
-    if (ok) {
-      // EDU_001b: 카메라 준비 완료 안내
-      await _tts.speak(
-          '카메라가 점자판 위에 위치했나요? 준비되면 촬영 버튼을 눌러주세요.');
-      await Future.delayed(const Duration(milliseconds: 500));
-      // EDU_002: 학습 항목 TTS 안내
-      await _tts.speak(widget.item.ttsGuide);
-    }
-  }
-
-  // ── 촬영 ──────────────────────────────────────
-  Future<void> _capture() async {
-    if (!_cameraReady || _isCapturing) return;
-    setState(() => _isCapturing = true);
-
-    // EDU_003: 분석 중 안내
-    await _tts.speak('분석 중입니다. 잠시 기다려주세요.');
-
-    final imagePath = await _camera.capture();
-    if (imagePath == null) {
-      await _tts.speak(HintService.recognitionFailed);
-      if (mounted) setState(() => _isCapturing = false);
-      return;
-    }
-
-    await _analyze(imagePath);
-  }
-
-  Future<void> _analyze(String imagePath) async {
-    // 실제 AI 연동 시 python_bridge.call(imagePath) 교체
-    await Future.delayed(const Duration(milliseconds: 600));
-
-    final answer = widget.item.dotPatterns[0];
-    final resultVector = _simulateVector(answer);
-
-    // 인식 실패: 빈 벡터이면서 BEG_008이 아닌 경우 (⑦-5)
-    if (resultVector.every((v) => v == 0) &&
-        widget.item.id != 'BEG_008') {
-      await _tts.speak(HintService.recognitionFailed);
-      if (mounted) setState(() => _isCapturing = false);
-      return;
-    }
-
-    final isCorrect =
-        _vectorsEqual(answer, resultVector);
+    final isCorrect = DateTime.now().millisecond.isOdd;
 
     if (isCorrect) {
-      await _handleCorrect();
-    } else {
-      await _handleWrong(answer, resultVector);
-    }
-  }
-
-  Future<void> _handleCorrect() async {
-    await ProgressService.markCompleted(widget.item.id);
-    // EDU_004: 정답 안내 + 1.5초 후 자동 이동
-    await _tts.speak('정답입니다!');
-    await Future.delayed(const Duration(milliseconds: 1500));
-    if (!mounted) return;
-    _goToNext();
-  }
-
-  Future<void> _handleWrong(
-      List<int> answer, List<int> result) async {
-    _wrongCount++;
-    // EDU_005: 오답 힌트 TTS (HintService)
-    final hint = HintService.generateHint(
-      answer: answer,
-      result: result,
-      wrongCount: _wrongCount,
-    );
-    await _tts.speak(hint);
-    if (mounted) setState(() => _isCapturing = false);
-  }
-
-  void _goToNext() {
-    final nextIndex = widget.currentIndex + 1;
-    final hasNext = nextIndex < widget.allItems.length;
-
-    if (hasNext) {
-      // 다음 항목으로 자동 이동 (EDU_004)
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ActiveLearningScreen(
-            item: widget.allItems[nextIndex],
-            levelId: widget.levelId,
-            levelName: widget.levelName,
-            allItems: widget.allItems,
-            currentIndex: nextIndex,
-          ),
-        ),
-      );
-    } else {
-      // 마지막 항목 → 학습 완료 (EDU_006)
+      await ProgressService.markCompleted(widget.item.id);
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (_) => LevelCompletionScreen(
             levelId: widget.levelId,
             levelName: widget.levelName,
-            itemName: widget.item.name,
+            itemName: widget.item.character,
+            allItems: widget.allItems,
+            currentIndex: widget.currentIndex,
           ),
         ),
       );
+    } else {
+      if (!mounted) return;
+      setState(() => _isAnalyzing = false);
+      _showFailureDialog();
     }
   }
 
-  // ── 시뮬레이션 (AI 연동 전 임시) ───────────────
-  List<int> _simulateVector(List<int> answer) {
-    // 70% 정답
-    if (DateTime.now().millisecond % 10 < 7) {
-      return List.from(answer);
-    }
-    final wrong = List<int>.from(answer);
-    wrong[DateTime.now().millisecond % 6] ^= 1;
-    return wrong;
+  void _showFailureDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        title: const Text('다시 시도해 보세요',
+            style: TextStyle(fontWeight: FontWeight.w800)),
+        content:
+            const Text('점자가 정확하지 않습니다.\n다시 찍어서 업로드해 주세요.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
   }
 
-  bool _vectorsEqual(List<int> a, List<int> b) {
-    for (int i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) return false;
-    }
-    return true;
-  }
-
-  @override
-  void dispose() {
-    _tts.dispose();
-    _camera.dispose();
-    super.dispose();
-  }
-
-  // ── UI ────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    // 카메라 거치 가이드 (최초 1회)
-    if (_showGuide) {
-      return CameraGuideScreen(
-        levelId: widget.levelId,
-        onConfirm: _onGuideConfirmed,
-      );
-    }
-
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: const Color(0xFFF0F6FF),
+      appBar: AppBar(
+        title: Text(widget.levelName),
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0F172A),
+        elevation: 0,
+      ),
       body: SafeArea(
-        child: Stack(
-          children: [
-            // ── 카메라 프리뷰 ──────────────────
-            if (_cameraReady && _camera.controller != null)
-              Positioned.fill(
-                child: CameraPreview(_camera.controller!),
-              )
-            else
-              const Center(
-                child: CircularProgressIndicator(
-                    color: Colors.white),
-              ),
-
-            // ── 상단 HUD ──────────────────────
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(
-                    20, 16, 20, 16),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.black87, Colors.transparent],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        // 뒤로가기
-                        IconButton(
-                          icon: const Icon(
-                              Icons.arrow_back_ios_new,
-                              color: Colors.white,
-                              size: 20),
-                          onPressed: () =>
-                              Navigator.maybePop(context),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            '${widget.levelName}  ${widget.currentIndex + 1}/${widget.allItems.length}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        // 다시 듣기
-                        Semantics(
-                          button: true,
-                          label: '안내 다시 듣기',
-                          child: IconButton(
-                            icon: const Icon(Icons.volume_up,
-                                color: Colors.white70),
-                            onPressed: () =>
-                                _tts.speak(widget.item.ttsGuide),
-                          ),
-                        ),
-                      ],
-                    ),
-                    // 학습 목표
-                    Container(
-                      margin: const EdgeInsets.only(
-                          left: 8, top: 4),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius:
-                            BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '${widget.item.character}  ${widget.item.name}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    vertical: 36, horizontal: 24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: const [
+                    BoxShadow(
+                        color: Color(0x0E000000),
+                        blurRadius: 20,
+                        offset: Offset(0, 8)),
                   ],
                 ),
-              ),
-            ),
-
-            // ── 하단 컨트롤 ───────────────────
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(
-                    24, 24, 24, 36),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.transparent, Colors.black87],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                ),
                 child: Column(
                   children: [
-                    // 오답 카운터
-                    if (_wrongCount > 0)
-                      Padding(
-                        padding:
-                            const EdgeInsets.only(bottom: 16),
-                        child: Text(
-                          '오답 $_wrongCount회',
-                          style: const TextStyle(
-                              color: Colors.orange,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    // 촬영 버튼
-                    Semantics(
-                      button: true,
-                      label: '촬영 버튼',
-                      child: GestureDetector(
-                        onTap: _capture,
-                        child: Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: _isCapturing
-                                ? Colors.white38
-                                : Colors.white,
-                            border: Border.all(
-                                color: Colors.white54,
-                                width: 4),
-                          ),
-                          child: _isCapturing
-                              ? const Padding(
-                                  padding:
-                                      EdgeInsets.all(20),
-                                  child:
-                                      CircularProgressIndicator(
-                                    color: Colors.black54,
-                                    strokeWidth: 3,
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.camera_alt,
-                                  size: 36,
-                                  color: Colors.black87,
-                                ),
-                        ),
+                    const Text(
+                      '학습 목표',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.4,
+                        color: Color(0xFF1D6FA8),
                       ),
                     ),
                     const SizedBox(height: 12),
-                    const Text(
-                      '점자판 완성 후 촬영 버튼을 누르세요',
-                      style: TextStyle(
-                          color: Colors.white60,
-                          fontSize: 13),
+                    Text(
+                      widget.item.character,
+                      style: const TextStyle(
+                        fontSize: 52,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      widget.item.description,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 15, color: Color(0xFF64748B)),
                     ),
                   ],
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline,
+                        color: Color(0xFF1D6FA8), size: 20),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '점자판에 위 문자를 만든 후\n갤러리에서 사진을 업로드하세요.',
+                        style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF1D4ED8),
+                            height: 1.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              if (_isAnalyzing)
+                const Column(
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 12),
+                    Text('분석 중...',
+                        style: TextStyle(color: Color(0xFF64748B))),
+                  ],
+                )
+              else
+                SizedBox(
+                  height: 56,
+                  child: ElevatedButton.icon(
+                    onPressed: _pickImage,
+                    icon: const Icon(Icons.image_outlined),
+                    label: const Text('이미지 업로드',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF1D4ED8),
+                      side: const BorderSide(
+                          color: Color(0xFFBFD7F7), width: 1.5),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(28)),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 12),
+            ],
+          ),
         ),
       ),
     );
