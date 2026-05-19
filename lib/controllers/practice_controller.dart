@@ -1,5 +1,6 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
+import 'package:puzzle_dot/models/camera_capture_result.dart';
 import 'package:puzzle_dot/services/camera_service.dart';
 import 'package:puzzle_dot/services/permission_service.dart';
 
@@ -29,11 +30,13 @@ class PracticeController extends ChangeNotifier {
   PracticeCameraStatus _status = PracticeCameraStatus.checking;
   bool _isPreparing = false;
   bool _isCapturing = false;
+  CameraCaptureResult? _lastCaptureResult;
 
   PracticeCameraStatus get status => _status;
   bool get isPreparing => _isPreparing;
   bool get isCapturing => _isCapturing;
   CameraController? get cameraController => _cameraService.controller;
+  CameraCaptureResult? get lastCaptureResult => _lastCaptureResult;
 
   /// 권한 확인 후 카메라 준비
   ///
@@ -62,11 +65,14 @@ class PracticeController extends ChangeNotifier {
     _setStatus(PracticeCameraStatus.ready);
   }
 
-  /// 촬영 요청
+  /// 카메라 촬영
   ///
-  /// 실제 AI/OpenCV 분석 연결 전까지는 이미지 경로만 반환
-  Future<String?> capture() async {
-    if (_isCapturing) return null;
+  /// 성공 시 imagePath 반환
+  /// 실패 시 실패 메시지 반환
+  Future<CameraCaptureResult> capture() async {
+    if (_isCapturing) {
+      return CameraCaptureResult.failure('이미 촬영 중입니다.');
+    }
 
     _isCapturing = true;
     notifyListeners();
@@ -74,9 +80,19 @@ class PracticeController extends ChangeNotifier {
     final imagePath = await _cameraService.capture();
 
     _isCapturing = false;
+
+    if (imagePath == null) {
+      _lastCaptureResult = CameraCaptureResult.failure(
+        '촬영에 실패했습니다. 다시 시도해주세요.',
+      );
+      notifyListeners();
+      return _lastCaptureResult!;
+    }
+
+    _lastCaptureResult = CameraCaptureResult.success(imagePath);
     notifyListeners();
 
-    return imagePath;
+    return _lastCaptureResult!;
   }
 
   void _setStatus(PracticeCameraStatus nextStatus) {

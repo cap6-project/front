@@ -5,9 +5,19 @@ import 'package:puzzle_dot/models/curriculum_item.dart';
 /// 역할:
 /// - 화면별 음성 안내 문장 제공
 /// - 화면 표시 문구와 음성 문구 분리
-/// - 숫자 점형 표현을 자연스러운 한국어로 변환
+/// - 점형 표현을 자연스러운 한국어로 변환
 class TtsScriptProvider {
   TtsScriptProvider._();
+
+  static const String onboardingWelcome =
+      '퍼즐닷 점자 학습 앱에 오신 것을 환영합니다. '
+      '이 앱에서는 점자 위치를 익히고, 자음과 모음, 받침, 숫자를 단계별로 학습할 수 있습니다. '
+      '학습을 시작하려면 화면 아래의 학습 시작하기 버튼을 눌러주세요.';
+
+  static const String cameraGuide =
+      '보호자분께서 스마트폰 카메라가 점자판 바로 위를 향하도록 거치해주세요. '
+      '점자판 전체가 화면에 들어와야 합니다. '
+      '준비되면 확인 버튼을 눌러주세요.';
 
   static const String cameraPermissionRequired =
       '카메라 권한이 필요합니다. 설정에서 카메라 권한을 허용해주세요.';
@@ -22,9 +32,7 @@ class TtsScriptProvider {
       '점자판을 화면 중앙에 맞춘 뒤 촬영 버튼을 눌러주세요.';
 
   static const String capturing = '촬영 중입니다.';
-
   static const String analyzing = '분석 중입니다. 잠시 기다려주세요.';
-
   static const String captureFailed = '촬영에 실패했습니다. 다시 시도해주세요.';
 
   static String curriculumSelection(String levelTitle) {
@@ -32,13 +40,20 @@ class TtsScriptProvider {
   }
 
   static String learningGuide(CurriculumItem item) {
-    final fallback = '이번 학습은 ${spokenItemName(item.character)}, '
+    if (item.ttsGuide.isNotEmpty) {
+      return normalizeForSpeech(item.ttsGuide);
+    }
+
+    return '이번 학습은 ${spokenItemName(item.character)}, '
         '${normalizeForSpeech(item.description)}입니다. '
         '점자판을 완성한 뒤 촬영 버튼을 눌러주세요.';
+  }
 
-    if (item.ttsGuide.isEmpty) return fallback;
-
-    return normalizeForSpeech(item.ttsGuide);
+  static String progressSummary({
+    required int completedCount,
+    required int totalCount,
+  }) {
+    return '전체 $totalCount개 중 $completedCount개 완료했습니다.';
   }
 
   static String completion({
@@ -46,7 +61,6 @@ class TtsScriptProvider {
     required int xpEarned,
   }) {
     final spokenName = spokenItemName(itemName);
-
     final itemMessage =
         spokenName.isEmpty ? '학습을 완료했습니다.' : '$spokenName 학습을 완료했습니다.';
 
@@ -55,13 +69,6 @@ class TtsScriptProvider {
         : '이미 완료한 학습이라 추가 경험치는 없습니다.';
 
     return '정답입니다! $itemMessage $xpMessage';
-  }
-
-  static String progressSummary({
-    required int completedCount,
-    required int totalCount,
-  }) {
-    return '전체 $totalCount개 중 $completedCount개 완료했습니다.';
   }
 
   static String incorrectHint(CurriculumItem item) {
@@ -79,7 +86,7 @@ class TtsScriptProvider {
   static String normalizeForSpeech(String value) {
     var result = value;
 
-    final dotWords = <String, String>{
+    final replacements = <String, String>{
       '1번점': '첫번째',
       '2번점': '두번째',
       '3번점': '세번째',
@@ -88,7 +95,7 @@ class TtsScriptProvider {
       '6번점': '여섯번째',
     };
 
-    for (final entry in dotWords.entries) {
+    for (final entry in replacements.entries) {
       result = result.replaceAll(entry.key, entry.value);
     }
 

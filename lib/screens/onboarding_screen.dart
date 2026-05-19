@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:puzzle_dot/core/constants/prefs_keys.dart';
 import 'package:puzzle_dot/screens/home_screen.dart';
-import 'package:puzzle_dot/services/app_tts_service.dart';
+import 'package:puzzle_dot/services/tts/app_tts_service.dart';
+import 'package:puzzle_dot/services/tts/tts_script_provider.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -14,10 +15,10 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final AppTtsService _tts = AppTtsService();
 
-  static const String _welcomeMessage =
-      '퍼즐닷 점자 학습 앱에 오신 것을 환영합니다. '
-      '이 앱에서는 점자 위치를 익히고, 자음과 모음, 받침, 숫자를 단계별로 학습할 수 있습니다. '
-      '학습을 시작하려면 화면 아래의 학습 시작하기 버튼을 눌러주세요.';
+  /// 온보딩 안내 문장
+  ///
+  /// 화면은 문장 내용을 직접 관리하지 않음
+  String get _welcomeMessage => TtsScriptProvider.onboardingWelcome;
 
   bool _isStarting = false;
 

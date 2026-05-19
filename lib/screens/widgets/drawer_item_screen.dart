@@ -9,10 +9,16 @@ class DrawerItemScreen extends StatelessWidget {
     required this.title,
   });
 
+  /// 홈 화면으로 이동
+  ///
+  /// Drawer 임시 페이지에서 메인 첫 화면으로 복귀
   void _goHome(BuildContext context) {
     Navigator.popUntil(context, (route) => route.isFirst);
   }
 
+  /// 상단 좌측 액션 영역
+  ///
+  /// 메뉴 열기와 홈 이동을 함께 제공
   Widget _buildLeading(BuildContext context) {
     return Builder(
       builder: (context) {
@@ -40,6 +46,10 @@ class DrawerItemScreen extends StatelessWidget {
     );
   }
 
+  String get _bodyText {
+    return '$title 페이지';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -55,9 +65,9 @@ class DrawerItemScreen extends StatelessWidget {
       ),
       body: Center(
         child: Semantics(
-          label: '$title 페이지',
+          label: _bodyText,
           child: Text(
-            '$title 페이지',
+            _bodyText,
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontSize: 26,

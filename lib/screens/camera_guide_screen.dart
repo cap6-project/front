@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:puzzle_dot/core/constants/prefs_keys.dart';
 import 'package:puzzle_dot/services/tts/app_tts_service.dart';
+import 'package:puzzle_dot/services/tts/tts_script_provider.dart';
 
 class CameraGuideScreen extends StatefulWidget {
   final String levelId;
@@ -20,20 +23,24 @@ class CameraGuideScreen extends StatefulWidget {
 class _CameraGuideScreenState extends State<CameraGuideScreen> {
   final AppTtsService _tts = AppTtsService();
 
-  static const _guideText =
-      '보호자분께서 스마트폰 카메라가 점자판 바로 위를 향하도록 거치해주세요. '
-      '점자판 전체가 화면에 들어와야 합니다. '
-      '준비되면 확인 버튼을 눌러주세요.';
+  /// 카메라 거치 안내 문장
+  ///
+  /// 화면은 문장 내용을 직접 관리하지 않음
+  String get _guideText => TtsScriptProvider.cameraGuide;
 
   @override
   void initState() {
     super.initState();
-    _tts.speak(_guideText);
+
+    /// 화면 진입 후 카메라 거치 안내 TTS 실행
+    ///
+    /// 문장 내용은 TtsScriptProvider가 담당
+    unawaited(_tts.speak(_guideText));
   }
 
   @override
   void dispose() {
-    _tts.stop();
+    unawaited(_tts.stop());
     super.dispose();
   }
 
@@ -127,9 +134,9 @@ class _CameraGuideScreenState extends State<CameraGuideScreen> {
                 ),
               ),
               const SizedBox(height: 28),
-              const Text(
+              Text(
                 _guideText,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 15,
                   color: Color(0xFF475569),
                   height: 1.6,

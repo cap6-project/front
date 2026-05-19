@@ -1,48 +1,47 @@
-/// 정답 벡터와 촬영 벡터를 비교해 TTS 힌트 문장을 생성합니다 (⑦-1).
-/// 외부 의존성 없는 순수 로직 클래스.
-abstract class HintService {
-  HintService._();
+import 'package:puzzle_dot/models/curriculum_item.dart';
+import 'package:puzzle_dot/services/tts/tts_script_provider.dart';
 
-  static const _dotNames = [
-    '왼쪽 첫 번째 점',
-    '왼쪽 두 번째 점',
-    '왼쪽 세 번째 점',
-    '오른쪽 첫 번째 점',
-    '오른쪽 두 번째 점',
-    '오른쪽 세 번째 점',
-  ];
+/// 오답 힌트 생성 서비스
+///
+/// 역할:
+/// - 커리큘럼 항목 기반 힌트 생성
+/// - 미완료 상태 힌트 생성
+/// - 추후 AI/OpenCV 분석 결과 벡터 기반 힌트 생성
+///
+/// TTS 자연화는 TtsScriptProvider가 담당
+class HintService {
+  const HintService();
 
-  /// [answer]: 정답 이진벡터, [result]: AI 반환 벡터, [wrongCount]: 누적 오답 횟수
-  static String generateHint({
-    required List<int> answer,
-    required List<int> result,
-    required int wrongCount,
-  }) {
-    // 3회 이상 연속 오답
-    if (wrongCount >= 3) {
-      return '계속 어려우신가요? 정답을 확인하시려면 화면을 두 번 탭 하세요.';
-    }
-
-    final remove = <String>[]; // 정답=0, AI=1 → 빼야 함
-    final add    = <String>[]; // 정답=1, AI=0 → 추가해야 함
-
-    for (int i = 0; i < 6; i++) {
-      if (answer[i] == 0 && result[i] == 1) {
-        remove.add('${_dotNames[i]}은 빼주세요.');
-      } else if (answer[i] == 1 && result[i] == 0) {
-        add.add('${_dotNames[i]}을 추가해주세요.');
-      }
-    }
-
-    final allHints = [...remove, ...add];
-
-    if (allHints.isEmpty) return '오답입니다. 다시 시도해주세요.';
-    if (allHints.length >= 3) return '여러 곳이 다릅니다. 처음부터 다시 만들어보세요.';
-
-    return '오답입니다. ${allHints.join(' ')}';
+  /// 기본 오답 힌트
+  ///
+  /// 현재는 목표 점형 재확인 중심
+  /// 추후 expected/actual 벡터 비교 결과로 상세 힌트 생성
+  String incorrectHint(CurriculumItem item) {
+    return TtsScriptProvider.incorrectHint(item);
   }
 
-  /// 인식 실패 통일 문장 (⑦-2)
-  static const String recognitionFailed =
-      '점자판이 잘 인식되지 않았습니다. 카메라와 점자판의 거리를 조정한 후 다시 촬영해주세요.';
+  /// 촬영/분석 미완료 힌트
+  ///
+  /// 점자판 위치나 이미지 상태가 불충분할 때 사용
+  String incompleteHint() {
+    return TtsScriptProvider.incompleteHint();
+  }
+
+  /// AI/OpenCV 벡터 기반 힌트 연결 지점
+  ///
+  /// expectedDots: 정답 점 위치
+  /// actualDots: 촬영 후 추출된 점 위치
+  ///
+  /// TODO: AI/OpenCV 팀의 벡터 포맷 확정 후 비교 로직 구현
+  String hintFromDotVectors({
+    required CurriculumItem item,
+    required List<int> expectedDots,
+    required List<int> actualDots,
+  }) {
+    if (expectedDots.isEmpty || actualDots.isEmpty) {
+      return incompleteHint();
+    }
+
+    return incorrectHint(item);
+  }
 }

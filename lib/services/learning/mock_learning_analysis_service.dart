@@ -1,14 +1,23 @@
 import 'package:puzzle_dot/models/curriculum_item.dart';
 import 'package:puzzle_dot/models/learning_result.dart';
+import 'package:puzzle_dot/services/hint_service.dart';
 import 'package:puzzle_dot/services/learning/learning_analysis_service.dart';
 
 /// 개발용 mock 분석 서비스
 ///
 /// 역할:
 /// - 실제 AI/OpenCV 연결 전 정답/오답/미완료 흐름 확인
-/// - 배포용 분석 로직과 분리
-/// - 실제 구현체로 교체 가능한 구조 유지
+/// - 결과 타입 결정
+/// - 힌트 문장 생성은 HintService에 위임
+///
+/// 실제 분석 구현체로 교체 가능한 구조 유지
 class MockLearningAnalysisService implements ILearningAnalysisService {
+  final HintService _hintService;
+
+  const MockLearningAnalysisService({
+    HintService hintService = const HintService(),
+  }) : _hintService = hintService;
+
   @override
   Future<LearningResult> analyzeImage({
     required String imagePath,
@@ -24,12 +33,12 @@ class MockLearningAnalysisService implements ILearningAnalysisService {
 
     if (seed == 1) {
       return LearningResult.incorrect(
-        '${targetItem.character} 점형을 다시 확인해주세요.',
+        _hintService.incorrectHint(targetItem),
       );
     }
 
     return LearningResult.incomplete(
-      '점자가 화면 중앙에 오도록 다시 촬영하거나 이미지를 선택해주세요.',
+      _hintService.incompleteHint(),
     );
   }
 }

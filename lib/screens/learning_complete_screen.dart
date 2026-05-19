@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:puzzle_dot/services/tts_manager.dart';
+import 'package:puzzle_dot/services/tts/tts_config.dart';
 import 'home_screen.dart';
 import 'level_detail_screen.dart';
 
@@ -36,10 +37,10 @@ class _LearningCompleteScreenState extends State<LearningCompleteScreen> {
 
   Future<void> _initializeTts() async {
     try {
-      await _tts.setLanguage('ko-KR');
-      await _tts.setSpeechRate(0.8);
-      await _tts.setVolume(1.0);
-      await _tts.setPitch(1.0);
+      await _tts.setLanguage(TtsConfig.language);
+      await _tts.setSpeechRate(TtsConfig.speechRate);
+      await _tts.setVolume(TtsConfig.volume);
+      await _tts.setPitch(TtsConfig.pitch);
     } catch (e) {
       debugPrint('TTS initialization error: $e');
     }
@@ -116,10 +117,13 @@ class _LearningCompleteScreenState extends State<LearningCompleteScreen> {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
-        if (!didPop) {
-          await _stopTts();
-          if (mounted) Navigator.pop(context);
-        }
+        if (didPop) return;
+
+        final navigator = Navigator.of(context);
+        await _stopTts();
+
+        if (!mounted) return;
+        navigator.pop();
       },
       child: Builder(
         builder: (context) {
@@ -168,8 +172,11 @@ class _LearningCompleteScreenState extends State<LearningCompleteScreen> {
                           child: InkWell(
                             borderRadius: BorderRadius.circular(16),
                             onTap: () async {
+                              final navigator = Navigator.of(context);
                               await _stopTts();
-                              if (mounted) Navigator.maybePop(context);
+
+                              if (!mounted) return;
+                              navigator.maybePop();
                             },
                             child: const SizedBox(
                               width: 48,
@@ -196,7 +203,7 @@ class _LearningCompleteScreenState extends State<LearningCompleteScreen> {
                         borderRadius: BorderRadius.circular(32),
                         boxShadow: [
                           BoxShadow(
-                            color: colorScheme.onSurface.withOpacity(0.12),
+                            color: colorScheme.onSurface.withValues(alpha: 0.12),
                             blurRadius: 24,
                             offset: const Offset(0, 12),
                           ),
@@ -219,7 +226,7 @@ class _LearningCompleteScreenState extends State<LearningCompleteScreen> {
                             textAlign: TextAlign.center,
                             style: TextStyle(
                                 fontSize: 18,
-                                color: colorScheme.onSurface.withOpacity(0.78)),
+                                color: colorScheme.onSurface.withValues(alpha: 0.78)),
                           ),
                           const SizedBox(height: 20),
                           if (_isSpeaking)

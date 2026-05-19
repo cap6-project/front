@@ -1,78 +1,65 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+/// 학습 결과 테스트용 debug 패널
+///
+/// 역할:
+/// - 실제 학습 UI와 mock 테스트 UI 분리
+/// - 정답/오답/미완료 흐름 수동 확인
+/// - kDebugMode 조건은 사용하는 화면에서 판단
+///
+/// 배포 전 제거 또는 비활성화하기 쉬운 구조
 class LearningDebugPanel extends StatelessWidget {
-  final VoidCallback onCorrect;
-  final VoidCallback onWrong;
-  final VoidCallback onCaptureFailed;
+  final Future<void> Function() onCorrect;
+  final Future<void> Function() onIncorrect;
+  final Future<void> Function() onIncomplete;
 
   const LearningDebugPanel({
     super.key,
     required this.onCorrect,
-    required this.onWrong,
-    required this.onCaptureFailed,
+    required this.onIncorrect,
+    required this.onIncomplete,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFFFFFBEB),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: const Color(0xFFFACC15),
-          width: 1.2,
+          color: const Color(0xFFFDE68A),
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Row(
-            children: [
-              Icon(
-                Icons.bug_report_outlined,
-                color: Color(0xFFA16207),
-                size: 20,
-              ),
-              SizedBox(width: 8),
-              Text(
-                '테스트 더미',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFFA16207),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
           const Text(
-            '카메라/AI 연결 전 임시 테스트 영역입니다.',
+            '개발 테스트',
             style: TextStyle(
-              fontSize: 12,
-              color: Color(0xFF854D0E),
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF92400E),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               _DebugButton(
-                label: '정답 처리',
-                icon: Icons.check_circle_outline,
+                label: '정답',
                 onPressed: onCorrect,
               ),
               _DebugButton(
-                label: '오답 처리',
-                icon: Icons.error_outline,
-                onPressed: onWrong,
+                label: '오답',
+                onPressed: onIncorrect,
               ),
               _DebugButton(
-                label: '촬영 실패',
-                icon: Icons.camera_alt_outlined,
-                onPressed: onCaptureFailed,
+                label: '미완료',
+                onPressed: onIncomplete,
               ),
             ],
           ),
@@ -84,31 +71,24 @@ class LearningDebugPanel extends StatelessWidget {
 
 class _DebugButton extends StatelessWidget {
   final String label;
-  final IconData icon;
-  final VoidCallback onPressed;
+  final Future<void> Function() onPressed;
 
   const _DebugButton({
     required this.label,
-    required this.icon,
     required this.onPressed,
   });
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 18),
-      label: Text(label),
+    return OutlinedButton(
+      onPressed: () => unawaited(onPressed()),
       style: OutlinedButton.styleFrom(
-        foregroundColor: const Color(0xFF854D0E),
+        foregroundColor: const Color(0xFF92400E),
         side: const BorderSide(
-          color: Color(0xFFFACC15),
-          width: 1.2,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
+          color: Color(0xFFF59E0B),
         ),
       ),
+      child: Text(label),
     );
   }
 }
