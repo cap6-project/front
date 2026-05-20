@@ -2,8 +2,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:puzzle_dot/core/constants/prefs_keys.dart';
 import 'package:puzzle_dot/models/curriculum_item.dart';
 import 'package:puzzle_dot/services/curriculum/curriculum_service.dart';
-import 'package:puzzle_dot/services/streak_service.dart';
-import 'package:puzzle_dot/services/xp_service.dart';
+import 'package:puzzle_dot/services/progress/streak_service.dart';
+import 'package:puzzle_dot/services/progress/xp_service.dart';
 
 /// 학습 진행률 저장 서비스
 ///

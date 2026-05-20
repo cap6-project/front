@@ -10,7 +10,7 @@ import 'package:puzzle_dot/services/tts/tts_config.dart';
 /// - TTS 설정값 통일
 /// - 중복 발화 방지
 /// - 화면 이동 시 stop 처리
-/// - interrupt=false 시 이전 음성 종료 후 다음 음성 실행
+/// - 오래된 TTS 이벤트가 새 발화를 끊지 않도록 보호
 ///
 /// 화면은 FlutterTts 직접 생성하지 않고 이 서비스 사용
 class AppTtsService implements ITtsService {
@@ -23,6 +23,7 @@ class AppTtsService implements ITtsService {
   final FlutterTts _tts = FlutterTts();
 
   bool _initialized = false;
+  int _speechToken = 0;
   Completer<void>? _currentSpeech;
   Future<void> _speechChain = Future<void>.value();
 
@@ -61,7 +62,15 @@ class AppTtsService implements ITtsService {
 
   Future<void> _speakNow(String message) async {
     await _ensureInitialized();
-    await stop();
+
+    /// 새 발화 시작 전 토큰 증가
+    ///
+    /// 이전 화면의 늦은 stop/cancel 이벤트가 새 발화 완료로 오인되는 문제 방지
+    final token = ++_speechToken;
+
+    await _stopCurrentSpeechOnly();
+
+    if (token != _speechToken) return;
 
     final speech = Completer<void>();
     _currentSpeech = speech;
@@ -74,7 +83,7 @@ class AppTtsService implements ITtsService {
         onTimeout: () {},
       );
     } finally {
-      if (identical(_currentSpeech, speech)) {
+      if (token == _speechToken && identical(_currentSpeech, speech)) {
         _currentSpeech = null;
       }
     }
@@ -82,6 +91,15 @@ class AppTtsService implements ITtsService {
 
   @override
   Future<void> stop() async {
+    /// 명시적 stop은 현재 발화 토큰을 무효화
+    ///
+    /// 화면 이동 시 진행 중인 speak 대기 상태도 함께 정리
+    _speechToken++;
+
+    await _stopCurrentSpeechOnly();
+  }
+
+  Future<void> _stopCurrentSpeechOnly() async {
     try {
       await _tts.stop();
     } catch (_) {

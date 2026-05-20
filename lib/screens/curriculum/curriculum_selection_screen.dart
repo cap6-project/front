@@ -7,7 +7,7 @@ import 'package:puzzle_dot/screens/learning/active_learning_screen.dart';
 import 'package:puzzle_dot/screens/curriculum/widgets/curriculum_card.dart';
 import 'package:puzzle_dot/screens/curriculum/widgets/curriculum_progress_header.dart';
 import 'package:puzzle_dot/screens/curriculum/widgets/empty_curriculum_view.dart';
-import 'package:puzzle_dot/services/progress_service.dart';
+import 'package:puzzle_dot/services/progress/progress_service.dart';
 import 'package:puzzle_dot/services/tts/app_tts_service.dart';
 import 'package:puzzle_dot/services/tts/tts_script_provider.dart';
 

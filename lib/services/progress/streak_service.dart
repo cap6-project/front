@@ -1,6 +1,12 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:puzzle_dot/core/constants/prefs_keys.dart';
 
+/// 연속 학습일 계산 서비스
+///
+/// 역할:
+/// - 하루 1개 이상 학습 완료 시 해당 날짜 학습 인정
+/// - 어제와 오늘이 이어지면 streak 증가
+/// - 하루 이상 비면 1일로 초기화
 class StreakService {
   StreakService._();
 

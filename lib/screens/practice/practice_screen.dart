@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:puzzle_dot/controllers/practice_controller.dart';
+import 'package:puzzle_dot/models/camera_permission_view_mode.dart';
 import 'package:puzzle_dot/models/learning_capture_source.dart';
 import 'package:puzzle_dot/screens/practice/permission_screen.dart';
 import 'package:puzzle_dot/screens/practice/widgets/camera_unavailable_view.dart';
@@ -135,7 +136,8 @@ class _PracticeScreenState extends State<PracticeScreen> {
     switch (_controller.status) {
       case PracticeCameraStatus.permissionRequired:
         return CameraPermissionView(
-          isRetry: false,
+          key: const ValueKey('camera_permission_initial'),
+          mode: CameraPermissionViewMode.initial,
           onConfirm: _confirmCameraPermission,
           onHome: _goHome,
         );
@@ -145,13 +147,15 @@ class _PracticeScreenState extends State<PracticeScreen> {
 
       case PracticeCameraStatus.permissionDenied:
         return CameraPermissionView(
-          isRetry: true,
+          key: const ValueKey('camera_permission_denied'),
+          mode: CameraPermissionViewMode.denied,
           onConfirm: _confirmCameraPermission,
           onHome: _goHome,
         );
 
       case PracticeCameraStatus.unavailable:
         return CameraUnavailableView(
+          reason: _controller.lastInitializationResult,
           onRetry: _confirmCameraPermission,
           onHome: _goHome,
         );

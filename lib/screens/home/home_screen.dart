@@ -11,12 +11,11 @@ import 'package:puzzle_dot/widgets/navigation/app_drawer.dart';
 import 'package:puzzle_dot/screens/home/widgets/home_action_card.dart';
 import 'package:puzzle_dot/screens/home/widgets/home_level_card.dart';
 import 'package:puzzle_dot/screens/home/widgets/home_stat_card.dart';
-import 'package:puzzle_dot/services/progress_service.dart';
+import 'package:puzzle_dot/services/progress/progress_service.dart';
 import 'package:puzzle_dot/services/progress/level_unlock_service.dart';
-import 'package:puzzle_dot/services/streak_service.dart';
+import 'package:puzzle_dot/services/progress/streak_service.dart';
 import 'package:puzzle_dot/services/tts/app_tts_service.dart';
-import 'package:puzzle_dot/services/tts_manager.dart';
-import 'package:puzzle_dot/services/xp_service.dart';
+import 'package:puzzle_dot/services/progress/xp_service.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   final int initialIndex;
@@ -72,9 +71,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   /// 탭 이동 전 진행 중인 음성 정리
   ///
-  /// 화면 이동 시 TTS 겹침 방지
+  /// 현재 앱 TTS 서비스만 정리
+  /// 이전 FlutterTts 직접 관리 방식 제거
   void _stopScreenAudio() {
-    unawaited(TtsManager.instance.stopAll());
     unawaited(AppTtsService().stop());
   }
 

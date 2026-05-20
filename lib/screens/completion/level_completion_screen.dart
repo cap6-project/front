@@ -7,11 +7,11 @@ import 'package:puzzle_dot/screens/completion/widgets/completion_card.dart';
 import 'package:puzzle_dot/screens/completion/widgets/completion_stat_card.dart';
 import 'package:puzzle_dot/screens/completion/widgets/completion_top_bar.dart';
 import 'package:puzzle_dot/screens/learning/active_learning_screen.dart';
-import 'package:puzzle_dot/services/learning_navigation_service.dart';
-import 'package:puzzle_dot/services/streak_service.dart';
+import 'package:puzzle_dot/services/learning/learning_navigation_service.dart';
+import 'package:puzzle_dot/services/progress/streak_service.dart';
 import 'package:puzzle_dot/services/tts/app_tts_service.dart';
 import 'package:puzzle_dot/services/tts/tts_script_provider.dart';
-import 'package:puzzle_dot/services/xp_service.dart';
+import 'package:puzzle_dot/services/progress/xp_service.dart';
 
 class LevelCompletionScreen extends StatefulWidget {
   final String levelId;

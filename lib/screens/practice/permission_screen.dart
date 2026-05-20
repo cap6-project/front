@@ -1,7 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:puzzle_dot/services/permission_service.dart';
+import 'package:puzzle_dot/models/camera_permission_view_mode.dart';
+import 'package:puzzle_dot/services/permission/permission_service.dart';
 import 'package:puzzle_dot/services/tts/app_tts_service.dart';
 import 'package:puzzle_dot/services/tts/tts_script_provider.dart';
 
@@ -12,7 +13,7 @@ class PermissionScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: CameraPermissionView(
-        isRetry: false,
+        mode: CameraPermissionViewMode.initial,
         onConfirm: () async {},
         onHome: () => Navigator.popUntil(context, (route) => route.isFirst),
       ),
@@ -27,15 +28,15 @@ class PermissionScreen extends StatelessWidget {
 /// - 권한 거절 후 재확인 UI 표시
 /// - 권한 안내/재확인 TTS 실행
 ///
-/// 실제 권한 확인 로직은 onConfirm으로 외부에서 주입
+/// 실제 권한 확인 로직은 onConfirm으로 외부 주입
 class CameraPermissionView extends StatefulWidget {
-  final bool isRetry;
+  final CameraPermissionViewMode mode;
   final Future<void> Function() onConfirm;
   final VoidCallback onHome;
 
   const CameraPermissionView({
     super.key,
-    required this.isRetry,
+    required this.mode,
     required this.onConfirm,
     required this.onHome,
   });
@@ -50,29 +51,53 @@ class _CameraPermissionViewState extends State<CameraPermissionView> {
   bool _isChecking = false;
   bool _hasSpokenInitialGuide = false;
 
+  bool get _isDeniedMode => widget.mode == CameraPermissionViewMode.denied;
+
   String get _initialGuide {
-    return widget.isRetry
+    return _isDeniedMode
         ? TtsScriptProvider.cameraPermissionDenied
         : TtsScriptProvider.cameraPermissionRequired;
   }
 
   String get _buttonText {
     if (_isChecking) return '확인 중...';
-    return widget.isRetry ? '다시 확인' : '확인';
+    return _isDeniedMode ? '다시확인' : '확인';
   }
 
   String get _buttonSemanticLabel {
     if (_isChecking) return '카메라 권한 확인 중';
-    return widget.isRetry ? '카메라 권한 다시 확인' : '카메라 권한 확인';
+    return _isDeniedMode ? '카메라 권한 다시확인' : '카메라 권한 확인';
+  }
+
+  String get _bodyText {
+    if (_isDeniedMode) {
+      return '카메라 권한을 확인할 수 없습니다.\n설정에서 권한을 허용한 뒤 다시확인해주세요.';
+    }
+
+    return '점자 학습을 위해 카메라 접근 권한이 필요합니다.\n아래 확인 버튼을 눌러 권한을 확인해주세요.';
   }
 
   @override
   void initState() {
     super.initState();
 
-    /// 화면이 실제로 그려진 뒤 최초 1회만 안내 TTS 실행
+    /// 화면 렌더링 후 최초 1회 안내
     ///
-    /// Practice/카메라 학습 진입 시에만 이 위젯이 생성되어야 함
+    /// Practice/카메라 학습 진입 시에만 생성되어야 함
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_speakInitialGuide());
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant CameraPermissionView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.mode == widget.mode) return;
+
+    /// 같은 위젯이 재사용되어도 새 상태 안내를 다시 읽도록 초기화
+    _hasSpokenInitialGuide = false;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_speakInitialGuide());
     });
@@ -96,7 +121,12 @@ class _CameraPermissionViewState extends State<CameraPermissionView> {
 
     setState(() => _isChecking = true);
 
-    await _tts.speak(TtsScriptProvider.cameraPermissionChecking);
+    if (_isDeniedMode) {
+      await _tts.speak(TtsScriptProvider.cameraPermissionRetry);
+    } else {
+      await _tts.speak(TtsScriptProvider.cameraPermissionChecking);
+    }
+
     await widget.onConfirm();
 
     if (!mounted) return;
@@ -136,9 +166,7 @@ class _CameraPermissionViewState extends State<CameraPermissionView> {
               ),
               const SizedBox(height: 14),
               Text(
-                widget.isRetry
-                    ? '카메라 권한을 확인할 수 없습니다.\n설정에서 권한을 허용한 뒤 다시 확인해주세요.'
-                    : '점자 학습을 위해 카메라 접근 권한이 필요합니다.\n아래 확인 버튼을 눌러 권한을 확인해주세요.',
+                _bodyText,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 15,
@@ -164,7 +192,7 @@ class _CameraPermissionViewState extends State<CameraPermissionView> {
                             ),
                           )
                         : Icon(
-                            widget.isRetry
+                            _isDeniedMode
                                 ? Icons.refresh
                                 : Icons.check_circle_outline,
                           ),
@@ -236,7 +264,7 @@ class _CameraPermissionViewState extends State<CameraPermissionView> {
                     ),
                     style: TextButton.styleFrom(
                       foregroundColor: const Color(0xFF64748B),
-                      disabledForegroundColor: Color(0xFFCBD5E1),
+                      disabledForegroundColor: const Color(0xFFCBD5E1),
                     ),
                   ),
                 ),

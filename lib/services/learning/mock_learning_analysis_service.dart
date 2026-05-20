@@ -1,6 +1,6 @@
 import 'package:puzzle_dot/models/curriculum_item.dart';
 import 'package:puzzle_dot/models/learning_result.dart';
-import 'package:puzzle_dot/services/hint_service.dart';
+import 'package:puzzle_dot/services/learning/hint_service.dart';
 import 'package:puzzle_dot/services/learning/learning_analysis_service.dart';
 
 /// 개발용 mock 분석 서비스

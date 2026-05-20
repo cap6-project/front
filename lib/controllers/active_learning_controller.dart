@@ -4,7 +4,7 @@ import 'package:puzzle_dot/models/learning_capture_source.dart';
 import 'package:puzzle_dot/models/learning_result.dart';
 import 'package:puzzle_dot/services/learning/learning_analysis_service.dart';
 import 'package:puzzle_dot/services/learning/mock_learning_analysis_service.dart';
-import 'package:puzzle_dot/services/progress_service.dart';
+import 'package:puzzle_dot/services/progress/progress_service.dart';
 
 /// Active Learning 상태 컨트롤러
 ///
