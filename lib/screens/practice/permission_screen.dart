@@ -27,8 +27,6 @@ class PermissionScreen extends StatelessWidget {
 /// - 최초 권한 확인 UI 표시
 /// - 권한 거절 후 재확인 UI 표시
 /// - 권한 안내/재확인 TTS 실행
-///
-/// 실제 권한 확인 로직은 onConfirm으로 외부 주입
 class CameraPermissionView extends StatefulWidget {
   final CameraPermissionViewMode mode;
   final Future<void> Function() onConfirm;
@@ -51,6 +49,14 @@ class _CameraPermissionViewState extends State<CameraPermissionView> {
   bool _isChecking = false;
   bool _hasSpokenInitialGuide = false;
 
+  /// 최초 확인 클릭 시 확인 중 UI 최소 노출 시간
+  ///
+  /// 에뮬레이터 권한 응답이 빨라도 화면 전환이 튀지 않도록 유지
+  static const Duration _minimumCheckingDuration = Duration(milliseconds: 850);
+
+  /// 확인 중 UI가 먼저 그려지도록 짧게 대기
+  static const Duration _checkingPaintDelay = Duration(milliseconds: 180);
+
   bool get _isDeniedMode => widget.mode == CameraPermissionViewMode.denied;
 
   String get _initialGuide {
@@ -62,11 +68,6 @@ class _CameraPermissionViewState extends State<CameraPermissionView> {
   String get _buttonText {
     if (_isChecking) return '확인 중...';
     return _isDeniedMode ? '다시확인' : '확인';
-  }
-
-  String get _buttonSemanticLabel {
-    if (_isChecking) return '카메라 권한 확인 중';
-    return _isDeniedMode ? '카메라 권한 다시확인' : '카메라 권한 확인';
   }
 
   String get _bodyText {
@@ -82,8 +83,6 @@ class _CameraPermissionViewState extends State<CameraPermissionView> {
     super.initState();
 
     /// 화면 렌더링 후 최초 1회 안내
-    ///
-    /// Practice/카메라 학습 진입 시에만 생성되어야 함
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_speakInitialGuide());
     });
@@ -95,7 +94,7 @@ class _CameraPermissionViewState extends State<CameraPermissionView> {
 
     if (oldWidget.mode == widget.mode) return;
 
-    /// 같은 위젯이 재사용되어도 새 상태 안내를 다시 읽도록 초기화
+    /// 같은 위젯 재사용 시 새 상태 안내 다시 읽기
     _hasSpokenInitialGuide = false;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -119,13 +118,28 @@ class _CameraPermissionViewState extends State<CameraPermissionView> {
   Future<void> _confirmPermission() async {
     if (_isChecking) return;
 
+    final startedAt = DateTime.now();
+
     setState(() => _isChecking = true);
+
+    /// 확인 중 UI 먼저 노출
+    await Future<void>.delayed(_checkingPaintDelay);
+    if (!mounted) return;
 
     if (_isDeniedMode) {
       await _tts.speak(TtsScriptProvider.cameraPermissionRetry);
     } else {
       await _tts.speak(TtsScriptProvider.cameraPermissionChecking);
     }
+
+    final elapsed = DateTime.now().difference(startedAt);
+    final remaining = _minimumCheckingDuration - elapsed;
+
+    if (remaining > Duration.zero) {
+      await Future<void>.delayed(remaining);
+    }
+
+    if (!mounted) return;
 
     await widget.onConfirm();
 
@@ -175,97 +189,64 @@ class _CameraPermissionViewState extends State<CameraPermissionView> {
                 ),
               ),
               const SizedBox(height: 36),
-              Semantics(
-                button: true,
-                label: _buttonSemanticLabel,
-                child: SizedBox(
-                  height: 54,
-                  child: ElevatedButton.icon(
-                    onPressed: _isChecking ? null : _confirmPermission,
-                    icon: _isChecking
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : Icon(
-                            _isDeniedMode
-                                ? Icons.refresh
-                                : Icons.check_circle_outline,
+              SizedBox(
+                height: 54,
+                child: ElevatedButton.icon(
+                  onPressed: _isChecking ? null : _confirmPermission,
+                  icon: _isChecking
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
                           ),
-                    label: Text(
-                      _buttonText,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
+                        )
+                      : Icon(
+                          _isDeniedMode
+                              ? Icons.refresh
+                              : Icons.check_circle_outline,
+                        ),
+                  label: Text(
+                    _buttonText,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
                     ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: const Color(0xFF93C5FD),
-                      disabledForegroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      elevation: 0,
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: const Color(0xFF93C5FD),
+                    disabledForegroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
                     ),
+                    elevation: 0,
                   ),
                 ),
               ),
               const SizedBox(height: 12),
-              Semantics(
-                button: true,
-                label: '설정으로 이동',
-                child: SizedBox(
-                  height: 54,
-                  child: OutlinedButton.icon(
-                    onPressed: _isChecking ? null : _openSettings,
-                    icon: const Icon(Icons.settings_outlined),
-                    label: const Text(
-                      '설정으로 이동',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF2563EB),
-                      disabledForegroundColor: const Color(0xFF94A3B8),
-                      side: const BorderSide(
-                        color: Color(0xFF2563EB),
-                        width: 1.4,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                    ),
+              SizedBox(
+                height: 54,
+                child: OutlinedButton.icon(
+                  onPressed: _isChecking ? null : _openSettings,
+                  icon: const Icon(Icons.settings_outlined),
+                  label: const Text(
+                    '설정으로 이동',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
               const SizedBox(height: 12),
-              Semantics(
-                button: true,
-                label: '홈으로 돌아가기',
-                child: SizedBox(
-                  height: 54,
-                  child: TextButton.icon(
-                    onPressed: _isChecking ? null : widget.onHome,
-                    icon: const Icon(Icons.home_outlined),
-                    label: const Text(
-                      '홈으로 돌아가기',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF64748B),
-                      disabledForegroundColor: const Color(0xFFCBD5E1),
-                    ),
+              SizedBox(
+                height: 54,
+                child: TextButton.icon(
+                  onPressed: _isChecking ? null : widget.onHome,
+                  icon: const Icon(Icons.home_outlined),
+                  label: const Text(
+                    '홈으로 돌아가기',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                   ),
                 ),
               ),

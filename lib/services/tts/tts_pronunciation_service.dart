@@ -32,6 +32,19 @@ class TtsPronunciationService {
     return TtsPronunciationMap.exactItemNames[trimmed] ?? normalize(trimmed);
   }
 
+  /// 문장 안 기호 발음 조회
+  ///
+  /// exactItemNames보다 symbolReplacements를 먼저 사용
+  /// 모음 학습 TTS처럼 화면 reading과 발음이 다를 때 사용
+  static String symbolName(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return trimmed;
+
+    return TtsPronunciationMap.symbolReplacements[trimmed] ??
+        TtsPronunciationMap.exactItemNames[trimmed] ??
+        normalize(trimmed);
+  }
+
   static String _replaceDotPatterns(String value) {
     var result = value;
 

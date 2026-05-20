@@ -51,9 +51,6 @@ class _ActiveLearningScreenState extends State<ActiveLearningScreen> {
     _controller = ActiveLearningController(targetItem: widget.item);
     _controller.addListener(_handleControllerChanged);
 
-    /// 화면 진입 안내 TTS
-    ///
-    /// 문장 내용은 TtsScriptProvider가 담당
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_speakCurrentGuide());
     });
@@ -65,8 +62,6 @@ class _ActiveLearningScreenState extends State<ActiveLearningScreen> {
     _controller.dispose();
 
     /// 화면 이동 중 dispose에서는 stop 호출 방지
-    ///
-    /// 정답 완료 화면 TTS가 이전 학습 화면 stop에 의해 끊기는 문제 방지
     if (!_isLeavingScreen) {
       unawaited(_tts.stop());
     }
@@ -95,14 +90,12 @@ class _ActiveLearningScreenState extends State<ActiveLearningScreen> {
     if (picked == null) return;
 
     final source = LearningCaptureSource.galleryMock(picked.path);
-
     await _analyzeCapture(source);
   }
 
   /// 학습 분석 공통 진입점
   ///
   /// 갤러리 mock 이미지와 실제 카메라 촬영 이미지 모두 이 함수로 연결
-  /// 실제 AI/OpenCV 분석은 controller의 analysisService 구현체 교체로 연결
   Future<void> _analyzeCapture(LearningCaptureSource source) async {
     await _tts.speak(TtsScriptProvider.analyzing);
 
@@ -120,21 +113,26 @@ class _ActiveLearningScreenState extends State<ActiveLearningScreen> {
 
     final title = result.isIncomplete ? '다시 확인해 주세요' : '다시 시도해 보세요';
 
-    final message = result.hint.isEmpty
-        ? '점자 모양을 다시 확인해주세요.'
-        : TtsScriptProvider.normalizeForSpeech(result.hint);
+    /// Alert 표시용 문장
+    ///
+    /// 화면에는 원문 reading 유지
+    /// TTS 발음 치환은 speak 직전에만 적용
+    final displayMessage =
+        result.hint.isEmpty ? '점자 모양을 다시 확인해주세요.' : result.hint;
+
+    final ttsMessage = TtsScriptProvider.normalizeForSpeech(displayMessage);
 
     _showResultDialog(
       title: title,
-      message: message,
+      message: displayMessage,
     );
 
-    unawaited(_tts.speak(message));
+    unawaited(_tts.speak(ttsMessage));
   }
 
   void _goCompletion() {
     _isLeavingScreen = true;
-  
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -181,6 +179,18 @@ class _ActiveLearningScreenState extends State<ActiveLearningScreen> {
     await _handleLearningResult(applied);
   }
 
+  /// 오답 Alert 표시용 문장
+  ///
+  /// 화면에는 원래 reading 표시
+  /// TTS 발음 치환은 speak 직전에만 적용
+  String _incorrectDisplayHint(CurriculumItem item) {
+    final reading = item.reading.trim();
+    final character = item.character.trim();
+    final label = reading.isNotEmpty ? reading : character;
+
+    return '$label 점형을 다시 확인해주세요.';
+  }
+
   @override
   Widget build(BuildContext context) {
     final isAnalyzing = _controller.isAnalyzing;
@@ -193,13 +203,9 @@ class _ActiveLearningScreenState extends State<ActiveLearningScreen> {
         foregroundColor: const Color(0xFF0F172A),
         elevation: 0,
         actions: [
-          Semantics(
-            button: true,
-            label: '다시 듣기',
-            child: IconButton(
-              onPressed: () => unawaited(_speakCurrentGuide()),
-              icon: const Icon(Icons.volume_up_outlined),
-            ),
+          IconButton(
+            onPressed: () => unawaited(_speakCurrentGuide()),
+            icon: const Icon(Icons.volume_up_outlined),
           ),
         ],
       ),
@@ -230,7 +236,7 @@ class _ActiveLearningScreenState extends State<ActiveLearningScreen> {
                   ),
                   onIncorrect: () => _applyDebugResult(
                     LearningResult.incorrect(
-                      TtsScriptProvider.incorrectHint(widget.item),
+                      _incorrectDisplayHint(widget.item),
                     ),
                   ),
                   onIncomplete: () => _applyDebugResult(

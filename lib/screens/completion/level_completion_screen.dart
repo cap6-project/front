@@ -58,8 +58,17 @@ class _LevelCompletionScreenState extends State<LevelCompletionScreen> {
     );
   }
 
+  /// 완료 화면 표시용 학습명
+  ///
+  /// UI에는 TTS 발음 치환값이 아니라 커리큘럼 reading 원문 표시
+  /// 예: 쌍시옷 표시, TTS에서는 쌍시옫 발음
   String get _completedItemLabel {
-    return TtsScriptProvider.spokenItemName(widget.itemName);
+    final currentItem = _currentItem;
+    if (currentItem != null && currentItem.reading.trim().isNotEmpty) {
+      return currentItem.reading.trim();
+    }
+
+    return widget.itemName.trim();
   }
 
   @override

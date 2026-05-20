@@ -48,7 +48,7 @@ class TtsScriptProvider {
 
   static String learningGuide(CurriculumItem item) {
     if (item.ttsGuide.isNotEmpty) {
-      return normalizeForSpeech(item.ttsGuide);
+      return normalizeForSpeech(_learningGuideForSpeech(item));
     }
 
     return normalizeForSpeech(
@@ -56,6 +56,57 @@ class TtsScriptProvider {
       '${item.description}입니다. '
       '점자판을 완성한 뒤 촬영 버튼을 눌러주세요.',
     );
+  }
+
+  /// 학습 안내 TTS용 문장
+  ///
+  /// 모음은 화면 표시용 reading 대신 발음 매핑값 사용
+  /// 예: 모음 애, ㅐ입니다 -> 모음 아이 애입니다
+  static String _learningGuideForSpeech(CurriculumItem item) {
+    final guide = item.ttsGuide;
+    final character = item.character.trim();
+
+    if (!_isVowel(character)) {
+      return guide;
+    }
+
+    final reading = item.reading.trim();
+        final spoken = TtsPronunciationService.symbolName(character);
+
+    if (reading.isEmpty || spoken.isEmpty) {
+      return guide;
+    }
+
+    return guide.replaceFirst(
+      '모음 $reading, $character',
+      '모음 $spoken',
+    );
+  }
+
+  static bool _isVowel(String value) {
+    return const {
+      'ㅏ',
+      'ㅑ',
+      'ㅓ',
+      'ㅕ',
+      'ㅗ',
+      'ㅛ',
+      'ㅜ',
+      'ㅠ',
+      'ㅡ',
+      'ㅣ',
+      'ㅐ',
+      'ㅒ',
+      'ㅔ',
+      'ㅖ',
+      'ㅘ',
+      'ㅙ',
+      'ㅚ',
+      'ㅝ',
+      'ㅞ',
+      'ㅟ',
+      'ㅢ',
+    }.contains(value);
   }
 
   static String progressSummary({
