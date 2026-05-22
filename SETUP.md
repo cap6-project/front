@@ -48,6 +48,7 @@ dependencies:
   image_picker: ^1.0.7       # 이미지 선택
   path_provider: ^2.1.2      # 임시 파일 경로
   permission_handler: ^11.3.0 # 권한 처리
+  shared_preferences: ^2.2.0
 ```
 
 ---
