@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:puzzle_dot/data/curriculum/home_learning_levels.dart';
 import 'package:puzzle_dot/models/home_learning_level.dart';
-import 'package:puzzle_dot/screens/misc/chat_screen.dart';
+import 'package:puzzle_dot/screens/chat_screen.dart';
 import 'package:puzzle_dot/screens/curriculum/curriculum_selection_screen.dart';
 import 'package:puzzle_dot/screens/practice/practice_screen.dart';
-import 'package:puzzle_dot/screens/misc/settings_screen.dart';
+import 'package:puzzle_dot/screens/settings_screen.dart';
 import 'package:puzzle_dot/widgets/navigation/app_drawer.dart';
 import 'package:puzzle_dot/screens/home/widgets/home_action_card.dart';
 import 'package:puzzle_dot/screens/home/widgets/home_level_card.dart';
@@ -140,8 +140,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
       case 3:
         return SettingsScreen(
+          selectedIndex: _selectedIndex,
           onBackPressed: _goHome,
-          isActive: true,
         );
 
       default:

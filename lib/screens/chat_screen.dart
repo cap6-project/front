@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/chatbot_service.dart';
+import 'curriculum/curriculum_selection_screen.dart';
+import 'settings_screen.dart';
 
 /// 챗봇과 대화하는 화면입니다.
 /// [onBackPressed]는 상위 네비게이션으로 돌아갈 때 호출되는 콜백입니다.
@@ -77,10 +79,48 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildTargetPage(String route) {
-    return Scaffold(
-      appBar: AppBar(title: Text('$route 화면')),
-      body: Center(child: Text('[$route] 페이지 연결 필요')),
-    );
+    switch (route) {
+      case 'consonant':
+        return const CurriculumSelectionScreen(
+          levelId: 'BAS_1',
+          levelTitle: '초급 1',
+        );
+      case 'vowel':
+        return const CurriculumSelectionScreen(
+          levelId: 'BAS_2',
+          levelTitle: '초급 2',
+        );
+      case 'word':
+        return const CurriculumSelectionScreen(
+          levelId: 'INT_1',
+          levelTitle: '중급 1',
+        );
+      case 'sentence':
+        return const CurriculumSelectionScreen(
+          levelId: 'INT_2',
+          levelTitle: '중급 2',
+        );
+      case 'beginner':
+        return const CurriculumSelectionScreen(
+          levelId: 'ENT_1',
+          levelTitle: '입문 1',
+        );
+      case 'advanced':
+        return const CurriculumSelectionScreen(
+          levelId: 'ADV_1',
+          levelTitle: '고급 1',
+        );
+      case 'settings':
+        return SettingsScreen(
+          selectedIndex: 3,
+          onBackPressed: () => Navigator.pop(context),
+        );
+      default:
+        return Scaffold(
+          appBar: AppBar(title: Text('$route 화면')),
+          body: Center(child: Text('[$route] 페이지 준비 중입니다.')),
+        );
+    }
   }
 
   @override
