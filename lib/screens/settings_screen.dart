@@ -1,7 +1,9 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:io'; // 파일 생성을 위해 추가됨
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image_picker/image_picker.dart'; // 추가됨
 
 class SettingsScreen extends StatefulWidget {
   final int selectedIndex;
@@ -20,6 +22,8 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   // 변수 및 상태 관리
   late FlutterTts _tts;
+  final ImagePicker _picker = ImagePicker(); // 이미지 피커 인스턴스 추가
+  String? _profileImagePath; // 선택된 프로필 이미지 경로 저장 (추가됨)
   int _completedCount = 0;
 
   double _speechRate = 1.0;
@@ -70,6 +74,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.dispose();
   }
 
+  // [기능] 이미지 선택 및 화면 적용 로직 추가
+  Future<void> _pickImage(ImageSource source) async {
+    final XFile? image = await _picker.pickImage(source: source);
+    if (image != null) {
+      // 이미지 선택 후 처리 로직
+      debugPrint("선택한 이미지 경로: ${image.path}");
+
+      // 상태 업데이트를 통해 화면에 즉시 반영 (추가됨)
+      setState(() {
+        _profileImagePath = image.path;
+      });
+
+      // [TODO] 실제 앱에서는 여기서 이미지 파일을 서버로 업로드하는 로직이 필요합니다.
+    }
+  }
+
   // TTS 제어 및 데이터 비즈니스 로직
   void _safeInitSettings() async {
     await _loadPreferences();
@@ -96,7 +116,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       await _tts.setLanguage('ko-KR');
       await _tts.setSpeechRate(_speechRate / 2.7);
-      await _tts.setVolume(1.0);
+      await _tts.setVolume(_volume);
       await _tts.setPitch(1.0);
     } catch (_) {}
   }
@@ -113,6 +133,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final volume = prefs.getDouble('tts_volume') ?? 1.0;
       final studyReminder = prefs.getBool('study_reminder_enabled') ?? true;
       final messageNotice = prefs.getBool('message_notice_enabled') ?? true;
+      // [TODO] 실제 앱에서는 SharedPreferences나 데이터베이스에 저장된 프로필 이미지 경로도 불러와야 합니다.
+      // _profileImagePath = prefs.getString('profile_image_path');
 
       int tempCount = completed;
       int intro = tempCount >= _introTotal ? _introTotal : tempCount;
@@ -184,7 +206,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _updateVolume(double value) {
     setState(() => _volume = value);
     _savePreference('tts_volume', value);
-    _tts.setVolume(1.0);
+    _tts.setVolume(value); 
   }
 
   void _toggleVibration(bool value) {
@@ -249,6 +271,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     fontSize: 26,
                     fontWeight: FontWeight.w900,
                     color: Color(0xFF0F172A),
+                    // [TODO] 실제 앱에서는 여기서 사용자의 실제 이름을 표시하도록 수정해야 합니다.
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -278,11 +301,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             shape: BoxShape.circle,
             color: Colors.white,
           ),
-          child: const Center(
+          child: Center(
             child: CircleAvatar(
               radius: 50,
-              backgroundColor: Color(0xFFEEF8FF),
-              child: Icon(Icons.person, size: 56, color: Color(0xFF2563EB)),
+              backgroundColor: const Color(0xFFEEF8FF),
+              // 선택된 이미지가 있으면 보여주고, 없으면 기본 아이콘 표시 (수정됨)
+              backgroundImage: _profileImagePath != null
+                  ? FileImage(File(_profileImagePath!))
+                  : null,
+              child: _profileImagePath == null
+                  ? const Icon(Icons.person, size: 56, color: Color(0xFF2563EB))
+                  : null,
             ),
           ),
         ),
@@ -682,24 +711,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               const SizedBox(height: 8),
+              // 카메라 열기
+              ListTile(
+                leading: const Icon(Icons.camera_alt, color: Color(0xFF2563EB)),
+                title: const Text(
+                  '카메라 열기',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              // 갤러리에서 선택하기
               ListTile(
                 leading: const Icon(
                   Icons.photo_library,
                   color: Color(0xFF2563EB),
                 ),
                 title: const Text(
-                  '갤러리에서 선택',
+                  '갤러리에서 선택하기',
                   style: TextStyle(fontWeight: FontWeight.w600),
                 ),
-                onTap: () => Navigator.pop(context),
-              ),
-              ListTile(
-                leading: const Icon(Icons.folder, color: Color(0xFF2563EB)),
-                title: const Text(
-                  '파일에서 선택',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                onTap: () => Navigator.pop(context),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.gallery);
+                },
               ),
               ListTile(
                 leading: const Icon(
@@ -713,7 +750,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                onTap: () => Navigator.pop(context),
+                onTap: () {
+                  // 현재 사진 삭제 로직 (수정됨)
+                  Navigator.pop(context);
+                  if (_profileImagePath != null) {
+                    setState(() {
+                      _profileImagePath = null; // 경로 초기화하여 기본 아이콘으로 복원
+                    });
+                    // [TODO] 실제 앱에서는 여기서 서버에 저장된 프로필 이미지 삭제 요청을 보내야 합니다.
+                  }
+                },
               ),
               const SizedBox(height: 12),
             ],
