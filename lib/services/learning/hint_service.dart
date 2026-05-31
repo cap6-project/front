@@ -5,6 +5,7 @@ import 'package:puzzle_dot/services/tts/tts_script_provider.dart';
 ///
 /// 역할:
 /// - 커리큘럼 항목 기반 힌트 생성
+/// - 틀린 셀 인덱스 기반 안내 문장 생성
 /// - 미완료 상태 힌트 생성
 /// - 추후 AI/OpenCV 분석 결과 벡터 기반 힌트 생성
 class HintService {
@@ -20,6 +21,34 @@ class HintService {
     final label = reading.isNotEmpty ? reading : character;
 
     return '$label 점형을 다시 확인해주세요.';
+  }
+
+  /// 틀린 셀 인덱스 기반 오답 힌트
+  ///
+  /// AI 결과가 틀린 셀 인덱스를 포함할 때 사용
+  String wrongCellHint({
+    required CurriculumItem item,
+    required List<int> wrongCellIndexes,
+  }) {
+    if (wrongCellIndexes.isEmpty) {
+      return incorrectHint(item);
+    }
+
+    final cellText = cellIndexListText(wrongCellIndexes);
+    return '$cellText을 다시 확인해주세요. ${incorrectHint(item)}';
+  }
+
+  /// 사용자 화면 표시용 셀 목록
+  ///
+  /// 내부 인덱스는 0부터 시작
+  /// 화면에서는 1번 셀부터 표시
+  String cellIndexListText(List<int> wrongCellIndexes) {
+    if (wrongCellIndexes.isEmpty) {
+      return '틀린 셀';
+    }
+
+    final labels = wrongCellIndexes.map((index) => '${index + 1}번 셀').toList();
+    return labels.join(', ');
   }
 
   /// 촬영/분석 미완료 힌트

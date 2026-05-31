@@ -10,11 +10,15 @@ import 'package:flutter/material.dart';
 class AnalyzeButton extends StatelessWidget {
   final bool isAnalyzing;
   final Future<void> Function() onPressed;
+  final IconData icon;
+  final String label;
 
   const AnalyzeButton({
     super.key,
     required this.isAnalyzing,
     required this.onPressed,
+    this.icon = Icons.image_outlined,
+    this.label = '테스트 이미지 업로드',
   });
 
   @override
@@ -32,23 +36,17 @@ class AnalyzeButton extends StatelessWidget {
                   color: Color(0xFF1D4ED8),
                 ),
               )
-            : const Icon(Icons.image_outlined),
+            : Icon(icon),
         label: Text(
-          isAnalyzing ? '분석 중...' : '테스트 이미지 업로드',
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-          ),
+          isAnalyzing ? '분석 중...' : label,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
         ),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.white,
           foregroundColor: const Color(0xFF1D4ED8),
           disabledBackgroundColor: Colors.white,
           disabledForegroundColor: const Color(0xFF1D4ED8),
-          side: const BorderSide(
-            color: Color(0xFFBFD7F7),
-            width: 1.5,
-          ),
+          side: const BorderSide(color: Color(0xFFBFD7F7), width: 1.5),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(28),
           ),
