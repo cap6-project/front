@@ -157,101 +157,114 @@ class _CameraPermissionViewState extends State<CameraPermissionView> {
     return Container(
       color: const Color(0xFFF8FAFC),
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Icon(
-                Icons.camera_alt_outlined,
-                size: 72,
-                color: Color(0xFF94A3B8),
-              ),
-              const SizedBox(height: 28),
-              const Text(
-                '카메라 권한이 필요합니다',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                _bodyText,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 15,
-                  color: Color(0xFF64748B),
-                  height: 1.6,
-                ),
-              ),
-              const SizedBox(height: 36),
-              SizedBox(
-                height: 54,
-                child: ElevatedButton.icon(
-                  onPressed: _isChecking ? null : _confirmPermission,
-                  icon: _isChecking
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(28),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Icon(
+                      Icons.camera_alt_outlined,
+                      size: 72,
+                      color: Color(0xFF94A3B8),
+                    ),
+                    const SizedBox(height: 28),
+                    const Text(
+                      '카메라 권한이 필요합니다',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      _bodyText,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: Color(0xFF64748B),
+                        height: 1.6,
+                      ),
+                    ),
+                    const SizedBox(height: 36),
+                    SizedBox(
+                      height: 54,
+                      child: ElevatedButton.icon(
+                        onPressed: _isChecking ? null : _confirmPermission,
+                        icon: _isChecking
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Icon(
+                                _isDeniedMode
+                                    ? Icons.refresh
+                                    : Icons.check_circle_outline,
+                              ),
+                        label: Text(
+                          _buttonText,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
                           ),
-                        )
-                      : Icon(
-                          _isDeniedMode
-                              ? Icons.refresh
-                              : Icons.check_circle_outline,
                         ),
-                  label: Text(
-                    _buttonText,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2563EB),
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: const Color(0xFF93C5FD),
+                          disabledForegroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          elevation: 0,
+                        ),
+                      ),
                     ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: const Color(0xFF93C5FD),
-                    disabledForegroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 54,
+                      child: OutlinedButton.icon(
+                        onPressed: _isChecking ? null : _openSettings,
+                        icon: const Icon(Icons.settings_outlined),
+                        label: const Text(
+                          '설정으로 이동',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
                     ),
-                    elevation: 0,
-                  ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 54,
+                      child: TextButton.icon(
+                        onPressed: _isChecking ? null : widget.onHome,
+                        icon: const Icon(Icons.home_outlined),
+                        label: const Text(
+                          '홈으로 돌아가기',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 54,
-                child: OutlinedButton.icon(
-                  onPressed: _isChecking ? null : _openSettings,
-                  icon: const Icon(Icons.settings_outlined),
-                  label: const Text(
-                    '설정으로 이동',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 54,
-                child: TextButton.icon(
-                  onPressed: _isChecking ? null : widget.onHome,
-                  icon: const Icon(Icons.home_outlined),
-                  label: const Text(
-                    '홈으로 돌아가기',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );

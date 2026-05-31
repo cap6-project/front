@@ -8,6 +8,7 @@ import 'package:puzzle_dot/models/curriculum_item.dart';
 import 'package:puzzle_dot/models/learning_capture_source.dart';
 import 'package:puzzle_dot/models/learning_result.dart';
 import 'package:puzzle_dot/screens/completion/level_completion_screen.dart';
+import 'package:puzzle_dot/screens/learning/wrong_cell_hint_screen.dart';
 import 'package:puzzle_dot/screens/learning/widgets/analyze_button.dart';
 import 'package:puzzle_dot/screens/learning/widgets/learning_debug_panel.dart';
 import 'package:puzzle_dot/screens/learning/widgets/learning_goal_card.dart';
@@ -93,6 +94,31 @@ class _ActiveLearningScreenState extends State<ActiveLearningScreen> {
     await _analyzeCapture(source);
   }
 
+  /// 카메라 촬영 이미지 분석
+  ///
+  /// 촬영 이미지도 업로드 이미지와 같은 분석 컨트롤러로 전달
+  /// macOS/일부 에뮬레이터처럼 카메라가 없는 환경은 안내 후 종료
+  Future<void> _captureImageAndAnalyze() async {
+    final picker = ImagePicker();
+
+    try {
+      final picked = await picker.pickImage(source: ImageSource.camera);
+      if (picked == null) return;
+
+      final source = LearningCaptureSource.camera(picked.path);
+      await _analyzeCapture(source);
+    } catch (_) {
+      if (!mounted) return;
+
+      const message = '현재 환경에서는 카메라 촬영을 사용할 수 없습니다. 실제 기기에서 다시 확인해주세요.';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(message)));
+
+      unawaited(_tts.speak(message));
+    }
+  }
+
   /// 학습 분석 공통 진입점
   ///
   /// 갤러리 mock 이미지와 실제 카메라 촬영 이미지 모두 이 함수로 연결
@@ -111,21 +137,34 @@ class _ActiveLearningScreenState extends State<ActiveLearningScreen> {
       return;
     }
 
+    if (result.isIncorrect && result.hasWrongCellIndexes) {
+      await _tts.stop();
+      if (!mounted) return;
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              WrongCellHintScreen(item: widget.item, result: result),
+        ),
+      );
+
+      return;
+    }
+
     final title = result.isIncomplete ? '다시 확인해 주세요' : '다시 시도해 보세요';
 
     /// Alert 표시용 문장
     ///
     /// 화면에는 원문 reading 유지
     /// TTS 발음 치환은 speak 직전에만 적용
-    final displayMessage =
-        result.hint.isEmpty ? '점자 모양을 다시 확인해주세요.' : result.hint;
+    final displayMessage = result.hint.isEmpty
+        ? '점자 모양을 다시 확인해주세요.'
+        : result.hint;
 
     final ttsMessage = TtsScriptProvider.normalizeForSpeech(displayMessage);
 
-    _showResultDialog(
-      title: title,
-      message: displayMessage,
-    );
+    _showResultDialog(title: title, message: displayMessage);
 
     unawaited(_tts.speak(ttsMessage));
   }
@@ -147,20 +186,12 @@ class _ActiveLearningScreenState extends State<ActiveLearningScreen> {
     );
   }
 
-  void _showResultDialog({
-    required String title,
-    required String message,
-  }) {
+  void _showResultDialog({required String title, required String message}) {
     showDialog<void>(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.w800),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
         content: Text(message),
         actions: [
           TextButton(
@@ -228,15 +259,23 @@ class _ActiveLearningScreenState extends State<ActiveLearningScreen> {
                 isAnalyzing: isAnalyzing,
                 onPressed: _pickImageAndAnalyze,
               ),
+              const SizedBox(height: 12),
+              AnalyzeButton(
+                isAnalyzing: isAnalyzing,
+                onPressed: _captureImageAndAnalyze,
+                icon: Icons.camera_alt_outlined,
+                label: '카메라로 촬영하기',
+              ),
               if (kDebugMode) ...[
                 const SizedBox(height: 18),
                 LearningDebugPanel(
-                  onCorrect: () => _applyDebugResult(
-                    LearningResult.correct(),
-                  ),
+                  onCorrect: () => _applyDebugResult(LearningResult.correct()),
                   onIncorrect: () => _applyDebugResult(
                     LearningResult.incorrect(
                       _incorrectDisplayHint(widget.item),
+                      wrongCellIndexes: widget.item.usesMultipleCells
+                          ? const [1]
+                          : const [0],
                     ),
                   ),
                   onIncomplete: () => _applyDebugResult(

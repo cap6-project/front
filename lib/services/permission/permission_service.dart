@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:puzzle_dot/models/camera_permission_result.dart';
 
@@ -13,22 +14,38 @@ abstract class PermissionService {
   ///
   /// 사용자가 확인/다시확인 버튼을 눌렀을 때만 호출
   static Future<CameraPermissionResult> requestCamera() async {
-    final status = await Permission.camera.request();
-    return _mapStatus(status);
+    try {
+      final status = await Permission.camera.request();
+      return _mapStatus(status);
+    } on MissingPluginException {
+      return CameraPermissionResult.granted;
+    }
   }
 
   /// 현재 카메라 권한 상태 확인
   ///
   /// 권한 팝업을 띄우지 않고 현재 상태만 조회
   static Future<CameraPermissionResult> checkCamera() async {
-    final status = await Permission.camera.status;
-    return _mapStatus(status);
+    try {
+      final status = await Permission.camera.status;
+      return _mapStatus(status);
+    } on MissingPluginException {
+      return CameraPermissionResult.granted;
+    }
   }
 
   /// 앱 설정 화면 열기
   ///
   /// permanentlyDenied 상태에서 사용
-  static Future<void> openSettings() => openAppSettings();
+  static Future<void> openSettings() async {
+    try {
+      await openAppSettings();
+    } on MissingPluginException {
+      /// macOS 등 일부 데스크톱 타깃은 permission_handler 설정 화면 미지원
+      ///
+      /// 설정 화면 이동 실패가 앱 크래시로 이어지지 않도록 무시
+    }
+  }
 
   static CameraPermissionResult _mapStatus(PermissionStatus status) {
     if (status.isGranted) {
