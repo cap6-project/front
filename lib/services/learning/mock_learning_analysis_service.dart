@@ -20,6 +20,9 @@ class MockLearningAnalysisService implements ILearningAnalysisService {
   }) : _hintService = hintService;
 
   @override
+  void dispose() {}
+
+  @override
   Future<LearningResult> analyzeImage({
     required String imagePath,
     required CurriculumItem targetItem,

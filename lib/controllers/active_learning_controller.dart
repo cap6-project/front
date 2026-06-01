@@ -2,8 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:puzzle_dot/models/curriculum_item.dart';
 import 'package:puzzle_dot/models/learning_capture_source.dart';
 import 'package:puzzle_dot/models/learning_result.dart';
+import 'package:puzzle_dot/services/learning/ai_learning_analysis_service.dart';
 import 'package:puzzle_dot/services/learning/learning_analysis_service.dart';
-import 'package:puzzle_dot/services/learning/mock_learning_analysis_service.dart';
 import 'package:puzzle_dot/services/progress/progress_service.dart';
 
 /// Active Learning 상태 컨트롤러
@@ -22,7 +22,11 @@ class ActiveLearningController extends ChangeNotifier {
   ActiveLearningController({
     required this.targetItem,
     ILearningAnalysisService? analysisService,
-  }) : _analysisService = analysisService ?? MockLearningAnalysisService();
+  }) : _analysisService = analysisService ?? AiLearningAnalysisService() {
+    if (_analysisService is AiLearningAnalysisService) {
+      _analysisService.initialize();
+    }
+  }
 
   bool _isAnalyzing = false;
   LearningResult? _lastResult;
@@ -89,5 +93,11 @@ class ActiveLearningController extends ChangeNotifier {
 
     _isAnalyzing = value;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _analysisService.dispose();
+    super.dispose();
   }
 }
