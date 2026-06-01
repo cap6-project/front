@@ -1,171 +1,98 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:puzzle_dot/controllers/practice_controller.dart';
-import 'package:puzzle_dot/models/camera_permission_view_mode.dart';
-import 'package:puzzle_dot/models/learning_capture_source.dart';
-import 'package:puzzle_dot/screens/practice/permission_screen.dart';
-import 'package:puzzle_dot/screens/practice/widgets/camera_unavailable_view.dart';
-import 'package:puzzle_dot/screens/practice/widgets/practice_camera_view.dart';
-import 'package:puzzle_dot/screens/practice/widgets/practice_loading_view.dart';
-import 'package:puzzle_dot/services/tts/app_tts_service.dart';
-import 'package:puzzle_dot/services/tts/tts_script_provider.dart';
 
-class PracticeScreen extends StatefulWidget {
+/// Practice 탭 안내 화면
+///
+/// 역할:
+/// - 하단 Practice 탭에서 독립 카메라 프리뷰가 뜨지 않도록 분리
+/// - 실제 카메라 촬영/분석은 학습 단계 화면에서 진행
+/// - 팀 main 병합 후 불필요하게 노출되던 카메라 권한/프리뷰 화면 제거
+class PracticeScreen extends StatelessWidget {
   final VoidCallback? onHome;
 
-  const PracticeScreen({
-    super.key,
-    this.onHome,
-  });
-
-  @override
-  State<PracticeScreen> createState() => _PracticeScreenState();
-}
-
-class _PracticeScreenState extends State<PracticeScreen> {
-  late final PracticeController _controller;
-  final AppTtsService _tts = AppTtsService();
-
-  PracticeCameraStatus? _lastSpokenStatus;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _controller = PracticeController();
-    _controller.addListener(_handleControllerChanged);
-
-    /// 권한 확인은 자동 실행하지 않음
-    ///
-    /// 사용자가 확인 버튼을 눌렀을 때만 카메라 권한 확인 시작
-  }
-
-  @override
-  void dispose() {
-    _controller.removeListener(_handleControllerChanged);
-    _controller.dispose();
-    unawaited(_tts.stop());
-    super.dispose();
-  }
-
-  void _handleControllerChanged() {
-    if (!mounted) return;
-
-    setState(() {});
-
-    final status = _controller.status;
-    if (_lastSpokenStatus == status) return;
-
-    _lastSpokenStatus = status;
-
-    switch (status) {
-      case PracticeCameraStatus.ready:
-        unawaited(_tts.speak(TtsScriptProvider.cameraReady));
-        break;
-
-      case PracticeCameraStatus.unavailable:
-        unawaited(_tts.speak(TtsScriptProvider.cameraUnavailable));
-        break;
-
-      case PracticeCameraStatus.permissionRequired:
-      case PracticeCameraStatus.checking:
-      case PracticeCameraStatus.permissionDenied:
-        /// 권한 관련 TTS는 CameraPermissionView에서만 담당
-        break;
-    }
-  }
-
-  Future<void> _confirmCameraPermission() async {
-    _lastSpokenStatus = null;
-    await _controller.prepare();
-  }
-
-  Future<void> _capture() async {
-    await _tts.speak(TtsScriptProvider.capturing);
-
-    final captureResult = await _controller.capture();
-    if (!mounted) return;
-
-    if (!captureResult.isSuccess || captureResult.imagePath == null) {
-      await _tts.speak(
-        captureResult.message ?? TtsScriptProvider.captureFailed,
-      );
-      return;
-    }
-
-    final source = LearningCaptureSource.camera(captureResult.imagePath!);
-
-    /// TODO: 학습 단계 정보 연결 후 ActiveLearning 분석 흐름으로 전달
-    ///
-    /// 현재 Practice 탭은 특정 CurriculumItem을 알지 못함
-    /// 추후 item/level 정보가 주입되면 ActiveLearningController.analyzeCapture(source)로 연결
-    await _tts.speak(TtsScriptProvider.analyzing);
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          source.isCamera
-              ? '촬영 이미지를 준비했습니다. 학습 분석 연결은 다음 단계에서 진행합니다.'
-              : '테스트 이미지를 준비했습니다.',
-        ),
-      ),
-    );
-  }
-
-  void _goHome() {
-    if (widget.onHome != null) {
-      widget.onHome!();
-      return;
-    }
-
-    Navigator.popUntil(context, (route) => route.isFirst);
-  }
+  const PracticeScreen({super.key, this.onHome});
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 220),
-      child: _buildBody(),
+    return Container(
+      color: const Color(0xFFF8FAFC),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Spacer(),
+              Semantics(
+                label: 'Practice 안내',
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x0F000000),
+                        blurRadius: 24,
+                        offset: Offset(0, 12),
+                      ),
+                    ],
+                  ),
+                  child: const Column(
+                    children: [
+                      Icon(
+                        Icons.camera_alt_outlined,
+                        size: 56,
+                        color: Color(0xFF2563EB),
+                      ),
+                      SizedBox(height: 18),
+                      Text(
+                        '카메라 학습은 학습 단계에서 진행됩니다',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 21,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      SizedBox(height: 12),
+                      Text(
+                        '홈에서 학습 단계를 선택한 뒤 카메라 촬영 또는 이미지 업로드로 점자를 확인해주세요.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 15,
+                          height: 1.55,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const Spacer(),
+              SizedBox(
+                height: 56,
+                child: ElevatedButton.icon(
+                  onPressed: onHome,
+                  icon: const Icon(Icons.home_outlined),
+                  label: const Text(
+                    '홈으로 돌아가기',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
-  }
-
-  Widget _buildBody() {
-    switch (_controller.status) {
-      case PracticeCameraStatus.permissionRequired:
-        return CameraPermissionView(
-          key: const ValueKey('camera_permission_initial'),
-          mode: CameraPermissionViewMode.initial,
-          onConfirm: _confirmCameraPermission,
-          onHome: _goHome,
-        );
-
-      case PracticeCameraStatus.checking:
-        return const PracticeLoadingView();
-
-      case PracticeCameraStatus.permissionDenied:
-        return CameraPermissionView(
-          key: const ValueKey('camera_permission_denied'),
-          mode: CameraPermissionViewMode.denied,
-          onConfirm: _confirmCameraPermission,
-          onHome: _goHome,
-        );
-
-      case PracticeCameraStatus.unavailable:
-        return CameraUnavailableView(
-          reason: _controller.lastInitializationResult,
-          onRetry: _confirmCameraPermission,
-          onHome: _goHome,
-        );
-
-      case PracticeCameraStatus.ready:
-        return PracticeCameraView(
-          cameraController: _controller.cameraController,
-          isCapturing: _controller.isCapturing,
-          onCapture: _capture,
-        );
-    }
   }
 }
