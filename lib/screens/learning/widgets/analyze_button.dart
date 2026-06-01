@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 /// 학습 이미지 분석 버튼
@@ -7,7 +9,7 @@ import 'package:flutter/material.dart';
 /// - 분석 중 로딩 상태 표시
 ///
 /// 이미지 선택/분석 로직은 화면/controller가 담당
-class AnalyzeButton extends StatelessWidget {
+class AnalyzeButton extends StatefulWidget {
   final bool isAnalyzing;
   final Future<void> Function() onPressed;
   final IconData icon;
@@ -22,23 +24,56 @@ class AnalyzeButton extends StatelessWidget {
   });
 
   @override
+  State<AnalyzeButton> createState() => _AnalyzeButtonState();
+}
+
+class _AnalyzeButtonState extends State<AnalyzeButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return SizedBox(
       height: 56,
       child: ElevatedButton.icon(
-        onPressed: isAnalyzing ? null : onPressed,
-        icon: isAnalyzing
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Color(0xFF1D4ED8),
+        onPressed: widget.isAnalyzing ? null : widget.onPressed,
+        icon: widget.isAnalyzing
+            ? AnimatedBuilder(
+                animation: _controller,
+                builder: (context, child) => Transform.rotate(
+                  angle: _controller.value * 2 * math.pi,
+                  child: child,
+                ),
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    backgroundColor:
+                        const Color(0xFF1D4ED8).withValues(alpha: 0.25),
+                    color: const Color(0xFF1D4ED8),
+                    value: 0.75,
+                  ),
                 ),
               )
-            : Icon(icon),
+            : Icon(widget.icon),
         label: Text(
-          isAnalyzing ? '분석 중...' : label,
+          widget.isAnalyzing ? '분석 중...' : widget.label,
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
         ),
         style: ElevatedButton.styleFrom(
