@@ -11,4 +11,6 @@ abstract class ILearningAnalysisService {
     required String imagePath,
     required CurriculumItem targetItem,
   });
+
+  void dispose() {}
 }
