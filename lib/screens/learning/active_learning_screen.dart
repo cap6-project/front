@@ -41,6 +41,7 @@ class _ActiveLearningScreenState extends State<ActiveLearningScreen> {
   late final ActiveLearningController _controller;
   final AppTtsService _tts = AppTtsService();
   bool _isLeavingScreen = false;
+  bool _isPendingAnalysis = false;
 
   int get _completedCount => widget.currentIndex;
   int get _totalCount => widget.allItems.length;
@@ -90,8 +91,12 @@ class _ActiveLearningScreenState extends State<ActiveLearningScreen> {
     final picked = await picker.pickImage(source: ImageSource.gallery);
     if (picked == null) return;
 
+    setState(() => _isPendingAnalysis = true);
+    await Future.delayed(Duration.zero);
+
     final source = LearningCaptureSource.galleryMock(picked.path);
     await _analyzeCapture(source);
+    if (mounted) setState(() => _isPendingAnalysis = false);
   }
 
   /// 카메라 촬영 이미지 분석
@@ -105,9 +110,14 @@ class _ActiveLearningScreenState extends State<ActiveLearningScreen> {
       final picked = await picker.pickImage(source: ImageSource.camera);
       if (picked == null) return;
 
+      setState(() => _isPendingAnalysis = true);
+      await Future.delayed(Duration.zero);
+
       final source = LearningCaptureSource.camera(picked.path);
       await _analyzeCapture(source);
+      if (mounted) setState(() => _isPendingAnalysis = false);
     } catch (_) {
+      if (mounted) setState(() => _isPendingAnalysis = false);
       if (!mounted) return;
 
       const message = '현재 환경에서는 카메라 촬영을 사용할 수 없습니다. 실제 기기에서 다시 확인해주세요.';
@@ -123,7 +133,7 @@ class _ActiveLearningScreenState extends State<ActiveLearningScreen> {
   ///
   /// 갤러리 mock 이미지와 실제 카메라 촬영 이미지 모두 이 함수로 연결
   Future<void> _analyzeCapture(LearningCaptureSource source) async {
-    await _tts.speak(TtsScriptProvider.analyzing);
+    unawaited(_tts.speak(TtsScriptProvider.analyzing));
 
     final result = await _controller.analyzeCapture(source);
     if (!mounted) return;
@@ -224,7 +234,7 @@ class _ActiveLearningScreenState extends State<ActiveLearningScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isAnalyzing = _controller.isAnalyzing;
+    final isAnalyzing = _isPendingAnalysis || _controller.isAnalyzing;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F6FF),
